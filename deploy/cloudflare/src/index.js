@@ -204,6 +204,32 @@ function identifyTasks(description){
   for(const f of frags){const nf=stripAccents(f); if(ACTION.some(v=>nf.includes(v))){const c=f.replace(/^(y|e|adem[aá]s|tambi[eé]n|que|para|de)\\s+/i,'').trim(); if(c.length>=3 && !tasks.some(t=>stripAccents(t)===stripAccents(c))) tasks.push(c.charAt(0).toUpperCase()+c.slice(1));} if(tasks.length>=8)break;}
   return tasks.length?tasks:[text.length>140?text.slice(0,140)+'…':text];
 }
+// Áreas candidatas más probables (para la comparativa por área).
+function classifyTop(desc,n){
+  if(!desc.trim())return [];
+  const signal=normalize([desc,desc,desc].join(' . '));
+  const scores=[];
+  for(const def of DATA.classifier){ if(def.category==='Otros')continue;
+    let score=0; for(const kw of def.keywords){const occ=countOcc(signal,normKw(kw)); if(occ>0) score+=occ*kw.trim().split(' ').length;}
+    if(score>0) scores.push({category:def.category,score});
+  }
+  scores.sort((a,b)=>b.score-a.score);
+  return scores.slice(0,n).map(s=>s.category);
+}
+// Estima horas+honorario para UN área concreta (reutilizado por estimate y por la comparativa).
+function estimateArea(area,rate,cf,uf){
+  const e=effAggregate(area);
+  const minN=(e&&e._local)?1:3;   // tus propuestas cuentan aunque sean pocas
+  let hMin,hRec,hMax,source,sample=0;
+  if(e && e.nHours>=minN){ hMin=r1(e.hP25);hRec=r1(e.hMed);hMax=r1(e.hP75);source='hours';sample=e.nHours; }
+  else if(e && e.nFee>=minN){ hMin=r1(e.fP25/rate);hRec=r1(e.fMed/rate);hMax=r1(e.fP75/rate);source='price';sample=e.nFee; }
+  else { const b=DATA.baselines[area]||DATA.defaultBaseline; hMin=b.min;hRec=b.rec;hMax=b.max;source='baseline'; }
+  const f=cf*uf;
+  return {area,hMin,hRec,hMax,feeMin:r2(hMin*rate*f),feeRec:r2(hRec*rate*f),feeMax:r2(hMax*rate*f),source,sample,local:(e&&e._local)||0};
+}
+// Etiqueta de respaldo (en qué se basa el importe de un área).
+function backLabel(r){ if(r.local) return 'afinado con '+r.local+' propuesta(s) tuya(s)'; if(r.source==='hours') return r.sample+' acuerdo(s) con horas'; if(r.source==='price') return r.sample+' acuerdo(s) con importe'; return 'sin acuerdos (orientativo)'; }
+
 function estimate(inp){
   const desc=(inp.desc||'').trim(), words=desc.split(/\\s+/).filter(Boolean);
   if(desc.length<25||words.length<6) return {needs:true, missing:['Describe con más detalle: tareas concretas, alcance y documentos implicados.']};
@@ -213,28 +239,24 @@ function estimate(inp){
   const tasks=identifyTasks(desc);
   const cf=(DATA.complexity_factor[inp.cplx] ?? DATA.complexity_factor['unknown'] ?? 1);
   const uf=(DATA.urgency_factor[inp.urg] ?? DATA.urgency_factor['unknown'] ?? 1);
-  const df=1;
   const usedBase=!(inp.rate>0); const rate=usedBase?DATA.baseRate:inp.rate;
-  const e=effAggregate(area);
-  // Para el histórico exigimos ≥3 muestras; pero si TÚ has añadido propuestas de
-  // esta área, nos fiamos de tus datos aunque sean pocos (≥1).
-  const minN=(e&&e._local)?1:3;
-  let hMin,hRec,hMax,source;
-  if(e && e.nHours>=minN){ hMin=r1(e.hP25); hRec=r1(e.hMed); hMax=r1(e.hP75); source='hours'; }
-  else if(e && e.nFee>=minN){ hMin=r1(e.fP25/rate); hRec=r1(e.fMed/rate); hMax=r1(e.fP75/rate); source='price'; }
-  else { const b=DATA.baselines[area]||DATA.defaultBaseline; hMin=b.min;hRec=b.rec;hMax=b.max; source='baseline'; }
-  const factor=cf*uf*df;
-  const feeMin=r2(hMin*rate*factor), feeRec=r2(hRec*rate*factor), feeMax=r2(hMax*rate*factor);
-  const usedHist=source==='hours'||source==='price';
+  const p=estimateArea(area,rate,cf,uf);
+  const source=p.source, usedHist=source!=='baseline';
   let conf; if(source==='hours'&&cls.conf==='high')conf='high'; else if(usedHist)conf='medium'; else conf='low';
+  // Comparativa: el área elegida + las áreas más probables detectadas (hasta 3).
+  const cmp=[],seen={};
+  function addCmp(a){ if(!a||a==='unknown'||seen[a])return; seen[a]=1; const r=estimateArea(a,rate,cf,uf); r.conf=(r.source==='baseline'?'low':'medium'); r.isChosen=(a===area); cmp.push(r); }
+  addCmp(area); classifyTop(desc,4).forEach(addCmp);
+  const comparison=cmp.slice(0,3);
   const missing=[];
   if(area==='unknown') missing.push('No se identificó el área con seguridad; indícala manualmente.');
   if(source==='baseline') missing.push('Sin acuerdos históricos de esta área: horas estimadas con un supuesto orientativo (ajustable).');
   if(source==='price') missing.push('Honorario anclado al precio histórico del área (horas implícitas = precio ÷ tarifa).');
   if(usedBase) missing.push('Se usó la tarifa base de '+rate+' €/h (no se indicó tarifa personalizada).');
-  if(e&&e._local) missing.push('Estimación AFINADA con '+e._local+' propuesta(s) tuya(s) de esta área (pestaña “Propuestas”).');
-  return {needs:false,area,sub:cls.sub,clsConf:cls.conf,tasks,hMin,hRec,hMax,feeMin,feeRec,feeMax,rate,usedBase,cf,uf,source,conf,missing,
-    sample:(e?(source==='hours'?e.nHours:e.nFee):0)};
+  if(p.local) missing.push('Estimación AFINADA con '+p.local+' propuesta(s) tuya(s) de esta área (pestaña “Propuestas”).');
+  return {needs:false,area,sub:cls.sub,clsConf:cls.conf,manualArea:!!manual,tasks,
+    hMin:p.hMin,hRec:p.hRec,hMax:p.hMax,feeMin:p.feeMin,feeRec:p.feeRec,feeMax:p.feeMax,
+    rate,usedBase,cf,uf,source,conf,comparison,missing,sample:p.sample};
 }
 function confSpan(c){const m={low:['c-low','Confianza baja'],medium:['c-med','Confianza media'],high:['c-high','Confianza alta']}[c]||['c-low','Confianza baja'];return '<span class="conf '+m[0]+'">'+m[1]+'</span>';}
 function renderResult(e){
@@ -245,10 +267,17 @@ function renderResult(e){
   const src=e.source==='hours'?('Horas a partir de '+e.sample+' trabajo(s) histórico(s) aprobado(s) del área.')
     :e.source==='price'?('Honorario anclado al precio histórico de '+e.sample+' acuerdo(s) aprobado(s) del área; horas implícitas = precio ÷ tarifa.')
     :('Horas estimadas con un supuesto típico del área (sin acuerdos históricos). Ajustable.');
+  const comp=(e.comparison&&e.comparison.length>1)?
+    '<h3 style="margin-top:14px">Comparativa por área</h3>'+
+    '<p class="hint">El mismo asunto puede encajar en varias áreas y el honorario cambia según los datos de cada una. Prioriza las <strong>respaldadas por acuerdos reales</strong> (mayor fiabilidad); las marcadas como “sin acuerdos” son orientativas.</p>'+
+    '<table><thead><tr><th>Área</th><th class="num">Honorario rec.</th><th>Respaldo</th><th>Fiabilidad</th></tr></thead><tbody>'+
+    e.comparison.map(r=>'<tr'+(r.isChosen?' style="background:rgba(200,162,76,.12)"':'')+'><td>'+esc(r.area)+(r.isChosen?' <span class="pill p-gold">elegida</span>':'')+'</td><td class="num"><strong>'+money(r.feeRec,cur)+'</strong></td><td class="hint">'+backLabel(r)+'</td><td>'+confSpan(r.conf)+'</td></tr>').join('')+
+    '</tbody></table>':'';
   box.innerHTML=
     '<div class="alert a-info"><span class="i">ℹ</span><div>Honorario <strong>sugerido</strong>, no obligatorio.</div></div>'+
+    (e.source==='baseline'?'<div class="alert a-warn"><span class="i">⚠</span><div><strong>Estimación orientativa.</strong> Esta área no tiene acuerdos históricos en la herramienta: el importe es un supuesto de partida. Ajústalo con criterio y, si el asunto encaja en otra área con datos reales, usa la comparativa de abajo.</div></div>':'')+
     (e.usedBase?'<div class="alert a-gold"><span class="i">★</span><div>Tarifa base de '+DATA.baseRate+' €/hora (no se introdujo tarifa personalizada).</div></div>':'')+
-    '<dl class="kv"><dt>Servicio detectado</dt><dd>'+esc(e.area)+(e.sub?' <span class="muted">/ '+esc(e.sub)+'</span>':'')+' '+confSpan(e.clsConf)+'</dd></dl>'+
+    '<dl class="kv"><dt>Servicio detectado</dt><dd>'+esc(e.area)+(e.sub?' <span class="muted">/ '+esc(e.sub)+'</span>':'')+' '+(e.manualArea?'<span class="pill p-muted">elegido manualmente</span>':'<span class="hint">clasificación </span>'+confSpan(e.clsConf))+'</dd></dl>'+
     '<h3 style="margin-top:6px">Tareas identificadas</h3><ul class="tasks">'+e.tasks.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>'+
     '<h3 style="margin-top:14px">Horas estimadas</h3><div class="ranges">'+
       '<div class="rc"><div class="l">Mínimo</div><div class="v">'+e.hMin+' h</div></div>'+
@@ -258,8 +287,10 @@ function renderResult(e){
       '<div class="rc"><div class="l">Mínimo</div><div class="v">'+money(e.feeMin,cur)+'</div></div>'+
       '<div class="rc rec"><div class="l">Recomendado</div><div class="v">'+money(e.feeRec,cur)+'</div></div>'+
       '<div class="rc"><div class="l">Máximo</div><div class="v">'+money(e.feeMax,cur)+'</div></div></div>'+
-    '<dl class="kv"><dt>Tarifa usada</dt><dd>'+e.rate+' €/hora '+(e.usedBase?'<span class="pill p-gold">tarifa base</span>':'<span class="pill p-muted">personalizada</span>')+'</dd>'+
-      '<dt>Factores</dt><dd>complejidad ×'+e.cf+' · urgencia ×'+e.uf+'</dd><dt>Confianza</dt><dd>'+confSpan(e.conf)+'</dd></dl>'+
+    comp+
+    '<dl class="kv" style="margin-top:14px"><dt>Tarifa usada</dt><dd>'+e.rate+' €/hora '+(e.usedBase?'<span class="pill p-gold">tarifa base</span>':'<span class="pill p-muted">personalizada</span>')+'</dd>'+
+      '<dt>Factores</dt><dd>complejidad ×'+e.cf+' · urgencia ×'+e.uf+'</dd>'+
+      '<dt>Fiabilidad del importe</dt><dd>'+confSpan(e.conf)+' <span class="hint">('+(e.source==='hours'?'horas de acuerdos reales':e.source==='price'?'precio histórico del área':'supuesto sin histórico')+')</span></dd></dl>'+
     '<h3 style="margin-top:10px">Explicación</h3><p class="hint">'+esc(src)+'</p>'+
     (e.missing.length?'<ul class="tasks hint">'+e.missing.map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul>':'')+
     '<div style="margin-top:14px"><button class="btn" id="bk-from-est">Generar desglose de actuaciones previstas</button></div>';
