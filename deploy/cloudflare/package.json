@@ -1,0 +1,14 @@
+{
+  "name": "calculadora-ilp-cloudflare",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Worker de Cloudflare que sirve la Calculadora de Honorarios (HTML embebido).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

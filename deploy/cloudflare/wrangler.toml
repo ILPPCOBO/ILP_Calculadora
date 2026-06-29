@@ -1,0 +1,5 @@
+# Worker de Cloudflare que sirve la app web (HTML embebido en src/index.js).
+# Despliega con:  npx wrangler deploy   (desde esta carpeta deploy/cloudflare)
+name = "calculadora-ilp"
+main = "src/index.js"
+compatibility_date = "2024-11-01"

@@ -1,6 +1,8 @@
 node_modules/
 *.log
 .DS_Store
+# Modelos OCR de tesseract: son descargables, no código fuente (no se versionan).
+*.traineddata
 # Datos de prototipo (se regeneran con `npm run seed`). Se conservan las carpetas, no su contenido.
 data/uploaded_documents/*
 !data/uploaded_documents/.gitkeep
