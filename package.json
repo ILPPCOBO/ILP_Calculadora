@@ -1,0 +1,38 @@
+{
+  "name": "calculadora-inteligente-honorarios",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plataforma interna que aprende de documentos históricos para sugerir honorarios revisables. Tarifa base 250 EUR/hora.",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "start": "node backend/server.ts",
+    "dev": "node --watch backend/server.ts",
+    "seed": "node admin/seed.ts",
+    "reset": "node admin/reset.ts",
+    "import": "node admin/import.ts",
+    "test": "node --test tests/*.test.ts",
+    "test:watch": "node --test --watch tests/*.test.ts"
+  },
+  "keywords": [
+    "honorarios",
+    "legaltech",
+    "pricing",
+    "ilp"
+  ],
+  "author": "ILP Abogados (interno)",
+  "license": "UNLICENSED",
+  "optionalDependencies": {
+    "mammoth": "^1.8.0",
+    "pdf-parse": "^1.1.1",
+    "xlsx": "^0.18.5"
+  },
+  "dependencies": {
+    "@kenjiuno/msgreader": "^1.28.0",
+    "pdf-to-img": "^6.2.0",
+    "tesseract.js": "^7.0.0",
+    "word-extractor": "^1.0.4"
+  }
+}

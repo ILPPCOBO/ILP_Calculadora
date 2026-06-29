@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calculadora Inteligente de Honorarios — ILP</title>
+  <meta name="description" content="Herramienta interna para el cálculo de honorarios legales sugeridos." />
+
+  <!-- Tipografías Google Fonts: Cormorant Garamond (títulos) + Inter (texto) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div id="app-shell">
+    <!-- ====================== Barra lateral / navegación ====================== -->
+    <aside id="sidebar" aria-label="Navegación principal">
+      <div class="brand">
+        <div class="brand-mark">ILP</div>
+        <div class="brand-text">
+          <span class="brand-title">Calculadora</span>
+          <span class="brand-sub">Inteligente de Honorarios</span>
+        </div>
+      </div>
+
+      <nav id="main-nav">
+        <a class="nav-link" href="#/describe-case" data-route="describe-case">
+          <span class="nav-ico" aria-hidden="true">✎</span> Describir caso
+        </a>
+        <a class="nav-link" href="#/upload" data-route="upload">
+          <span class="nav-ico" aria-hidden="true">⇪</span> Subir documentos
+        </a>
+        <a class="nav-link" href="#/records" data-route="records">
+          <span class="nav-ico" aria-hidden="true">▤</span> Revisar registros
+        </a>
+        <a class="nav-link" href="#/areas" data-route="areas">
+          <span class="nav-ico" aria-hidden="true">⊞</span> Por área y precios
+        </a>
+        <a class="nav-link" href="#/calculator" data-route="calculator">
+          <span class="nav-ico" aria-hidden="true">∎</span> Calculadora
+        </a>
+        <a class="nav-link" href="#/planned-actions" data-route="planned-actions">
+          <span class="nav-ico" aria-hidden="true">❧</span> Desglose de actuaciones
+        </a>
+        <a class="nav-link" href="#/history" data-route="history">
+          <span class="nav-ico" aria-hidden="true">⟲</span> Historial
+        </a>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="base-rate-badge" id="sidebar-base-rate">
+          <span class="brl-label">Tarifa base</span>
+          <span class="brl-value">250 €/hora</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ====================== Contenido principal ====================== -->
+    <div id="main-area">
+      <header id="topbar">
+        <div class="topbar-left">
+          <button id="nav-toggle" class="icon-btn" aria-label="Abrir/cerrar navegación" title="Menú">☰</button>
+          <h1 id="page-title">Describir caso</h1>
+        </div>
+        <div class="topbar-right">
+          <span id="api-status" class="api-status" title="Estado de la conexión con la API">
+            <span class="dot"></span> API
+          </span>
+          <span class="user-chip" title="Usuario interno">
+            <span class="user-ini">IL</span> Usuario interno
+          </span>
+        </div>
+      </header>
+
+      <main id="view" aria-live="polite">
+        <!-- Las pantallas se renderizan aquí por el router (hash-routing). -->
+      </main>
+
+      <footer id="footer">
+        <span>Herramienta interna — los honorarios mostrados son <strong>sugeridos</strong>, no obligatorios (Regla 1).</span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Contenedor de notificaciones (toasts) -->
+  <div id="toast-container" aria-live="assertive"></div>
+
+  <!-- Punto de entrada: router + capa fetch + páginas -->
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

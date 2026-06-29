@@ -1,0 +1,16 @@
+{
+  "id": "cat_4fc41bbb-32b",
+  "name": "Startups",
+  "description": "Rondas y pactos de socios: financiación, term sheets, ESOP y constitución.",
+  "subcategories": [
+    "Rondas de financiación",
+    "Pactos de socios",
+    "Stock options / ESOP",
+    "Constitución de startup",
+    "Term sheets"
+  ],
+  "default_pricing_method": "hourly",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1,
+  "active": true
+}

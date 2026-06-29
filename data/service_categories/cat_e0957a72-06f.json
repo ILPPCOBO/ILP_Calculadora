@@ -1,0 +1,15 @@
+{
+  "id": "cat_e0957a72-06f",
+  "name": "Concursal",
+  "description": "Concurso y pre-concurso: administración concursal, calificación y acciones de reintegración.",
+  "subcategories": [
+    "Pre-concurso",
+    "Concurso de acreedores",
+    "Calificación concursal",
+    "Acciones de reintegración"
+  ],
+  "default_pricing_method": "hourly",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1.15,
+  "active": true
+}

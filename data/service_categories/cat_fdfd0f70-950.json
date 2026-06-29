@@ -1,0 +1,16 @@
+{
+  "id": "cat_fdfd0f70-950",
+  "name": "M&A",
+  "description": "Fusiones, adquisiciones y joint ventures: SPA, due diligence y acuerdos de inversión.",
+  "subcategories": [
+    "Adquisiciones",
+    "Fusiones",
+    "Joint ventures",
+    "Due diligence en M&A",
+    "Acuerdos de inversión"
+  ],
+  "default_pricing_method": "blended",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1.2,
+  "active": true
+}

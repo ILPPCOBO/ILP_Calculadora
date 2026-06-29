@@ -1,0 +1,16 @@
+{
+  "id": "cat_494c0200-9d9",
+  "name": "Compliance",
+  "description": "Cumplimiento normativo y supervisión: prevención penal, AML, canal de denuncias y matriz de riesgos.",
+  "subcategories": [
+    "Prevención penal",
+    "Prevención de blanqueo (AML)",
+    "Canal de denuncias",
+    "Código ético y conducta",
+    "Matriz de riesgos"
+  ],
+  "default_pricing_method": "monthly",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1,
+  "active": true
+}

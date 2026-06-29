@@ -1,0 +1,15 @@
+{
+  "id": "cat_49a53988-be9",
+  "name": "Energías renovables",
+  "description": "Renovables y PPA: desarrollo de proyectos, permitting y M&A de activos renovables.",
+  "subcategories": [
+    "PPA",
+    "Desarrollo de proyectos",
+    "Permitting y autorizaciones",
+    "M&A renovables"
+  ],
+  "default_pricing_method": "blended",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1.15,
+  "active": true
+}

@@ -1,0 +1,15 @@
+{
+  "id": "cat_a4b8ee42-641",
+  "name": "Procesal penal",
+  "description": "Defensa penal económica: delitos societarios, investigaciones internas y diligencias.",
+  "subcategories": [
+    "Defensa penal económica",
+    "Delitos societarios",
+    "Investigaciones internas",
+    "Diligencias previas"
+  ],
+  "default_pricing_method": "hourly",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1.25,
+  "active": true
+}

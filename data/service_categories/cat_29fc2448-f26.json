@@ -1,0 +1,15 @@
+{
+  "id": "cat_29fc2448-f26",
+  "name": "Secretarías de consejo",
+  "description": "Asesoría a consejos de administración: secretaría, actas y gobierno del consejo.",
+  "subcategories": [
+    "Secretaría del consejo",
+    "Actas y acuerdos",
+    "Asesoramiento a consejeros",
+    "Gobierno del consejo"
+  ],
+  "default_pricing_method": "monthly",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1,
+  "active": true
+}

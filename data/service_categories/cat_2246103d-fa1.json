@@ -1,0 +1,16 @@
+{
+  "id": "cat_2246103d-fa1",
+  "name": "Procesal civil",
+  "description": "Litigación y arbitraje: reclamaciones, medidas cautelares y ejecuciones.",
+  "subcategories": [
+    "Litigación civil",
+    "Arbitraje",
+    "Reclamación de cantidad",
+    "Medidas cautelares",
+    "Ejecuciones"
+  ],
+  "default_pricing_method": "blended",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1.2,
+  "active": true
+}

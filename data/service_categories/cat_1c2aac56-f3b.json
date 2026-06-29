@@ -1,0 +1,16 @@
+{
+  "id": "cat_1c2aac56-f3b",
+  "name": "Regulatorio financiero",
+  "description": "DORA, MiCA, MiFID II y supervisión: autorizaciones, criptoactivos y relación con reguladores.",
+  "subcategories": [
+    "MiFID II",
+    "MiCA y criptoactivos",
+    "DORA y resiliencia operativa",
+    "Supervisión y autorizaciones",
+    "Folletos y emisiones"
+  ],
+  "default_pricing_method": "hourly",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1.2,
+  "active": true
+}

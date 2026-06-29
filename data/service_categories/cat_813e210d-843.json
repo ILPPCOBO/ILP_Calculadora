@@ -1,0 +1,16 @@
+{
+  "id": "cat_813e210d-843",
+  "name": "Protección de datos",
+  "description": "RGPD y LOPDGDD: adaptación, EIPD, DPO externo y brechas de seguridad.",
+  "subcategories": [
+    "RGPD y LOPDGDD",
+    "Evaluaciones de impacto (EIPD)",
+    "Delegado de protección de datos (DPO)",
+    "Brechas de seguridad",
+    "Auditoría de privacidad"
+  ],
+  "default_pricing_method": "fixed",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1,
+  "active": true
+}

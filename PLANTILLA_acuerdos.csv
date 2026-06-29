@@ -1,0 +1,4 @@
+Cliente,Servicio,Horas,Importe,Tarifa,Moneda,Fecha,Tipo de fee
+Acme SL,Concurso de acreedores fase comun,55,13750,250,EUR,2024-03-10,fixed
+Beta SA,Registro de marca nacional OEPM,8,2000,250,EUR,2024-05-02,fixed
+Gamma SL,Iguala laboral asesoramiento recurrente,,900,,EUR,2024-01-15,monthly

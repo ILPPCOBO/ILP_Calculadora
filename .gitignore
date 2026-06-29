@@ -1,0 +1,25 @@
+node_modules/
+*.log
+.DS_Store
+# Datos de prototipo (se regeneran con `npm run seed`). Se conservan las carpetas, no su contenido.
+data/uploaded_documents/*
+!data/uploaded_documents/.gitkeep
+data/extracted_records/*
+!data/extracted_records/.gitkeep
+data/pricing_formulas/*
+!data/pricing_formulas/.gitkeep
+data/approved_formulas/*
+!data/approved_formulas/.gitkeep
+data/calculation_history/*
+!data/calculation_history/.gitkeep
+# Las categorías de servicio se versionan (semilla base):
+# data/service_categories/* SÍ se conserva
+
+data/inbox/*
+!data/inbox/.gitkeep
+data/planned_action_breakdowns/*
+!data/planned_action_breakdowns/.gitkeep
+data/exported_breakdown_documents/*
+!data/exported_breakdown_documents/.gitkeep
+data/exports/*
+!data/exports/.gitkeep

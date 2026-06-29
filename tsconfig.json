@@ -1,0 +1,19 @@
+{
+  "//": "Sólo para soporte del editor (type-checking). En ejecución usamos el type-stripping nativo de Node 24, por eso no se compila a /dist.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["backend/**/*.ts", "services/**/*.ts", "admin/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "data"]
+}

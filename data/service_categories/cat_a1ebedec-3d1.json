@@ -1,0 +1,15 @@
+{
+  "id": "cat_a1ebedec-3d1",
+  "name": "Reestructuraciones",
+  "description": "Reestructuración financiera y operativa: refinanciación, planes y homologación de deuda.",
+  "subcategories": [
+    "Reestructuración financiera",
+    "Planes de reestructuración",
+    "Refinanciación de deuda",
+    "Reestructuración operativa"
+  ],
+  "default_pricing_method": "blended",
+  "default_hourly_rate": 250,
+  "default_complexity_factor": 1.2,
+  "active": true
+}
