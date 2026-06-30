@@ -104,10 +104,9 @@
 (function(){
   var H="ef781b49fdbcbaab77daa38dbf1873014915536bb98123475783d55bd047bb07";
   function unlock(){document.body.classList.remove("locked");}
-  if(sessionStorage.getItem("ilp_gate_ok")==="1"){unlock();return;}
   async function chk(code){try{if(window.crypto&&crypto.subtle){var b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(code));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,"0");}).join("")===H;}}catch(e){}return code===atob("Q2FsY3VsYWRvcklMUEAyMDI2IQ==");}
   var f=document.getElementById("gate-form");
-  f.addEventListener("submit",async function(ev){ev.preventDefault();var v=document.getElementById("gate-input").value;var ok=await chk(v);if(ok){try{sessionStorage.setItem("ilp_gate_ok","1");}catch(e){}unlock();}else{document.getElementById("gate-err").textContent="Código incorrecto. Inténtalo de nuevo.";var i=document.getElementById("gate-input");i.value="";i.focus();}});
+  f.addEventListener("submit",async function(ev){ev.preventDefault();var v=document.getElementById("gate-input").value;var ok=await chk(v);if(ok){unlock();}else{document.getElementById("gate-err").textContent="Código incorrecto. Inténtalo de nuevo.";var i=document.getElementById("gate-input");i.value="";i.focus();}});
   var inp=document.getElementById("gate-input");if(inp)inp.focus();
 })();
 </script>
