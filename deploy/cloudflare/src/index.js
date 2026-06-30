@@ -1,4 +1,4 @@
-// Worker de Cloudflare — Calculadora de Honorarios (HTML embebido). npx wrangler deploy
+// Worker de Cloudflare — Calculadora de Honorarios (HTML embebido, con acceso por código). npx wrangler deploy
 const HTML = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -83,9 +83,35 @@ const HTML = `<!DOCTYPE html>
   #pr-list table{min-width:680px}
   #pr-list input,#pr-list select{width:100%;font-family:inherit;font-size:12.5px;padding:5px 6px;border:1px solid var(--border);border-radius:5px;background:#fff;color:var(--ink)}
   #pr-list .num input{text-align:right}
+  /* Pantalla de acceso (candado por código) */
+  body.locked > header.top, body.locked > nav.tabs, body.locked > main, body.locked > footer{display:none !important}
+  #gate{position:fixed;inset:0;background:linear-gradient(180deg,var(--navy),var(--navy-700));display:none;align-items:center;justify-content:center;padding:20px;z-index:1000}
+  body.locked #gate{display:flex}
+  .gate-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:380px;width:100%;padding:30px 28px;text-align:center;box-shadow:0 12px 44px rgba(0,0,0,.35)}
+  .gate-card h2{font-size:22px}
 </style>
 </head>
-<body>
+<body class="locked">
+<div id="gate"><form class="gate-card" id="gate-form">
+  <div class="brand-mark" style="margin:0 auto 14px">ILP</div>
+  <h2 style="margin:0 0 4px">Acceso restringido</h2>
+  <p class="muted" style="font-size:13px;margin:0 0 18px">Calculadora de Honorarios · herramienta interna de ILP Abogados</p>
+  <input type="password" id="gate-input" placeholder="Código de acceso" autocomplete="current-password" style="width:100%;font-family:inherit;font-size:15px;padding:11px 13px;border:1px solid var(--border);border-radius:8px;text-align:center">
+  <button class="btn" type="submit" style="width:100%;margin-top:12px">Entrar</button>
+  <div id="gate-err" style="color:var(--danger);font-size:13px;margin-top:10px;min-height:18px"></div>
+  <div class="muted" style="font-size:11px;margin-top:14px">Honorarios sugeridos · uso interno</div>
+</form></div>
+<script>
+(function(){
+  var H="ef781b49fdbcbaab77daa38dbf1873014915536bb98123475783d55bd047bb07";
+  function unlock(){document.body.classList.remove("locked");}
+  if(sessionStorage.getItem("ilp_gate_ok")==="1"){unlock();return;}
+  async function chk(code){try{if(window.crypto&&crypto.subtle){var b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(code));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,"0");}).join("")===H;}}catch(e){}return code===atob("Q2FsY3VsYWRvcklMUEAyMDI2IQ==");}
+  var f=document.getElementById("gate-form");
+  f.addEventListener("submit",async function(ev){ev.preventDefault();var v=document.getElementById("gate-input").value;var ok=await chk(v);if(ok){try{sessionStorage.setItem("ilp_gate_ok","1");}catch(e){}unlock();}else{document.getElementById("gate-err").textContent="Código incorrecto. Inténtalo de nuevo.";var i=document.getElementById("gate-input");i.value="";i.focus();}});
+  var inp=document.getElementById("gate-input");if(inp)inp.focus();
+})();
+</script>
 <header class="top">
   <div class="brand-mark">ILP</div>
   <div><div class="brand-t">Calculadora de Honorarios</div><div class="brand-s">Versión offline · misma lógica que la app</div></div>
