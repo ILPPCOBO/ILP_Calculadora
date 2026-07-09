@@ -100,8 +100,8 @@ const CATEGORY_SEEDS: CatSeed[] = [
   },
   {
     name: 'Asesoramiento corporativo',
-    description: 'Gobierno corporativo y societario: operaciones societarias, juntas, consejos y pactos de socios.',
-    subcategories: ['Gobierno corporativo', 'Operaciones societarias', 'Secretaría societaria', 'Juntas y consejos', 'Pactos de socios'],
+    description: 'Gobierno corporativo y societario: operaciones societarias, juntas, consejos, pactos de socios y conflictos societarios.',
+    subcategories: ['Gobierno corporativo', 'Operaciones societarias', 'Secretaría societaria', 'Juntas y consejos', 'Pactos de socios', 'Conflictos Societarios'],
     default_pricing_method: 'hourly',
     default_complexity_factor: 1.0,
   },

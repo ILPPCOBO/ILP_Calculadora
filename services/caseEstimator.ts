@@ -19,6 +19,8 @@ import { getAreaBaseline } from '../backend/config/areaBaselines.ts';
 import { recordsRepo, calculationsRepo } from '../backend/storage/index.ts';
 import { newId, nowIso } from '../backend/utils/id.ts';
 import { classify } from './serviceClassifier.ts';
+import { getValuationCriteria } from './valuationCriteria.ts';
+import type { MatterValuationCriteria } from './valuationCriteria.ts';
 import type {
   UrgencyLevel, ComplexityLevel, ConfidenceLevel, FeeCalculation,
 } from '../backend/models/index.ts';
@@ -59,6 +61,8 @@ export interface CaseEstimate {
   confidence_level: ConfidenceLevel;
   explanation: string;
   warnings: string[];
+  /** Criterios de valoración de la materia (fases, fijos por actuación, éxito…), o null. */
+  valuation_criteria: MatterValuationCriteria | null;
   calculation_id?: string;
 }
 
@@ -167,6 +171,7 @@ export function estimateCase(input: CaseInput): CaseEstimate {
       confidence_level: 'low',
       explanation: 'La descripción es demasiado breve para estimar. Añade qué hay que hacer, sobre qué documentos y con qué objetivo.',
       warnings: [],
+      valuation_criteria: null,
     };
   }
 
@@ -180,6 +185,11 @@ export function estimateCase(input: CaseInput): CaseEstimate {
   });
   const serviceDetected = cls.service_category || 'unknown';
   const subcategory = cls.service_subcategory ?? null;
+
+  // ----- Criterios de valoración de la materia (fases, fijos por actuación,
+  //       comisión de éxito, provisión…). No alteran el rango numérico por horas:
+  //       lo encuadran y justifican (Reglas 1, 9, 10, 18). -----
+  const valuationCriteria = getValuationCriteria(serviceDetected, subcategory, input.description);
 
   // ----- Tareas -----
   const tasks = identifyTasks(input.description);
@@ -245,6 +255,14 @@ export function estimateCase(input: CaseInput): CaseEstimate {
   } else if (hoursSource === 'historical_price') {
     warnings.push('Honorario anclado al precio histórico de trabajos similares; las "horas" son implícitas (precio ÷ tarifa).');
   }
+  if (valuationCriteria) {
+    warnings.push(
+      `Esta materia ("${valuationCriteria.title}") suele estructurarse por criterios propios `
+      + '(fases, fijos por actuación, comisión de éxito, provisión a cuenta), no solo por horas: '
+      + 'consulta el cuadro de criterios y honorarios de referencia junto a esta estimación.',
+    );
+    missing.push('Confirma el alcance real (nº de demandas/querellas, fase contratada) para aplicar el cuadro de honorarios de la materia.');
+  }
 
   // ----- Resumen + explicación -----
   const scopeSummary = `Encargo de ${serviceDetected}${subcategory ? ` / ${subcategory}` : ''}`
@@ -281,6 +299,7 @@ export function estimateCase(input: CaseInput): CaseEstimate {
     confidence_level: confidence,
     explanation,
     warnings,
+    valuation_criteria: valuationCriteria,
   };
 }
 

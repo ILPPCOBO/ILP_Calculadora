@@ -9,9 +9,9 @@ import {
 } from '/app.js';
 
 const AREAS = [
-  'No estoy seguro', 'Marcas', 'Propiedad intelectual', 'Contratos mercantiles',
-  'Constitución de sociedades', 'Compliance', 'Protección de datos', 'Litigios',
-  'Due diligence', 'Consultoría regulatoria', 'Laboral', 'Fiscal',
+  'No estoy seguro', 'Asesoramiento corporativo', 'Marcas', 'Propiedad intelectual',
+  'Contratos mercantiles', 'Constitución de sociedades', 'Compliance', 'Protección de datos',
+  'Litigios', 'Due diligence', 'Consultoría regulatoria', 'Laboral', 'Fiscal',
   'Revisión documental', 'Redacción de informes', 'Otros',
 ];
 const URGENCY = [['normal', 'Normal'], ['urgent', 'Urgente'], ['very_urgent', 'Muy urgente'], ['unknown', 'No estoy seguro']];
@@ -95,6 +95,53 @@ async function estimate(view) {
   } finally { btn.textContent = t; btn.disabled = false; }
 }
 
+/** Cuadro de criterios de valoración + honorarios de referencia de la materia. */
+function criteriaBlock(e, cur) {
+  const c = e.valuation_criteria;
+  if (!c) return '';
+  const fmtAmount = (f) => {
+    if (f.model === 'a_cuenta' && f.percentage != null) return `${esc(f.percentage)}%`;
+    if (f.amount == null) return dash(null);
+    return `${money(f.amount, cur)}${f.vat_excluded ? ' <span class="muted">+ IVA</span>' : ''}`;
+  };
+  const rows = (c.reference_fees || []).map((f) => `
+    <tr>
+      <td class="small">${esc(f.phase)}</td>
+      <td class="small">${esc(f.concept)}${f.note ? `<br><span class="muted">${esc(f.note)}</span>` : ''}</td>
+      <td class="small mono">${esc(f.unit)}</td>
+      <td class="small" style="text-align:right">${fmtAmount(f)}</td>
+    </tr>`).join('');
+  const criterios = (c.criteria || []).map((k) => `
+    <li><strong>${esc(k.label)}.</strong> <span class="small muted">${esc(k.detail)}</span></li>`).join('');
+  const legal = (c.legal_basis || []).map((l) => `<li>${esc(l)}</li>`).join('');
+  const notes = (c.notes || []).map((n) => `<li>${esc(n)}</li>`).join('');
+
+  return `
+    <div class="card" style="margin-top:16px;border-left:3px solid var(--gold,#c8a24c);">
+      <h3 style="margin-top:0">Criterios de valoración de la materia</h3>
+      <p class="small muted">${esc(c.title)} — ${esc(c.summary)}</p>
+      <p class="small">Esta materia se estructura por criterios propios (no solo por horas). El rango
+        por horas de arriba es orientativo; el cuadro siguiente es la <strong>referencia de honorarios</strong>
+        de una propuesta real anonimizada (revisable, Regla 1).</p>
+
+      <h4 class="mt-8">Criterios que aplica</h4>
+      <ul class="small">${criterios}</ul>
+
+      <h4 class="mt-8">Cuadro de honorarios de referencia</h4>
+      <div style="overflow-x:auto">
+        <table class="table small">
+          <thead><tr><th>Fase</th><th>Concepto</th><th>Unidad</th><th style="text-align:right">Referencia</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+
+      <h4 class="mt-8">Base jurídica</h4>
+      <ul class="small muted">${legal}</ul>
+      ${notes ? `<ul class="small muted">${notes}</ul>` : ''}
+      <p class="small muted">Fuente: <span class="mono">${esc(c.source)}</span></p>
+    </div>`;
+}
+
 function renderEstimate(box, e) {
   if (e.needs_more_info) {
     box.innerHTML = `
@@ -149,6 +196,8 @@ function renderEstimate(box, e) {
       <dt>Factores aplicados</dt><dd>${factores}</dd>
       <dt>Confianza</dt><dd>${confidenceBadge(e.confidence_level)}</dd>
     </dl>
+
+    ${criteriaBlock(e, cur)}
 
     <h3>Trabajos históricos comparables</h3>
     ${comparables.length

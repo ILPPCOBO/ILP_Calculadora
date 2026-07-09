@@ -98,6 +98,10 @@ export const CATEGORY_KEYWORDS: CategoryDefinition[] = [
       'mercantil', 'constitucion de sociedad', 'estatutos', 'estatutos sociales',
       'junta general', 'junta de socios', 'ampliacion de capital', 'reduccion de capital',
       'operacion societaria', 'secretaria societaria', 'objeto social', 'organo de administracion',
+      'socios minoritarios', 'socio minoritario', 'conflicto societario', 'conflictos societarios',
+      'abuso de la mayoria', 'abuso de mayoria', 'impugnacion de acuerdos', 'acuerdos sociales',
+      'retribucion del administrador', 'doctrina del vinculo', '348 bis', 'acuerdo de gobernanza',
+      'reparto de dividendos', 'dotacion de reservas', 'quorum', 'accion de responsabilidad',
     ],
     subcategories: [
       { name: 'Gobierno corporativo', keywords: ['gobierno corporativo', 'buen gobierno', 'politica societaria'] },
@@ -105,6 +109,18 @@ export const CATEGORY_KEYWORDS: CategoryDefinition[] = [
       { name: 'Secretaría societaria', keywords: ['secretaria societaria', 'libro de actas', 'certificaciones societarias'] },
       { name: 'Juntas y consejos', keywords: ['junta general', 'junta de socios', 'consejo de administracion'] },
       { name: 'Pactos de socios', keywords: ['pacto de socios', 'acuerdo de socios', 'shareholders agreement'] },
+      {
+        name: 'Conflictos Societarios',
+        keywords: [
+          'conflicto societario', 'conflictos societarios', 'socios minoritarios', 'socio minoritario',
+          'defensa de la minoria', 'proteccion de la minoria', 'abuso de la mayoria', 'abuso de mayoria',
+          'socio mayoritario', 'administrador unico', 'retribucion del administrador', 'doctrina del vinculo',
+          '348 bis', 'articulo 348 bis', 'impugnacion de acuerdos', 'impugnacion de acuerdos sociales',
+          'acuerdo de gobernanza', 'protocolo de gobernanza', 'reparto de dividendos', 'dotacion de reservas',
+          'accion social de responsabilidad', 'accion de responsabilidad', 'derecho de separacion',
+          'convocatoria de junta', 'quorum',
+        ],
+      },
     ],
   },
   {

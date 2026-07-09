@@ -21,7 +21,7 @@ Las 18 reglas maestras viven en [`PROJECT_RULES.md`](PROJECT_RULES.md) y mandan 
 | Almacenamiento | **JSON por archivo** bajo `/data/*`, detrás de una interfaz `Repository<T>` | Prototipo legible; migrable a SQLite/Postgres sin tocar la lógica |
 | Frontend | **HTML + CSS + JS vanilla** (SPA con hash-routing), identidad visual ILP | "Frontend básico" sin build pesado |
 | Extracción | `pdf-parse`, `mammoth`, `xlsx` como **dependencias opcionales** con degradación elegante | Nunca falla en silencio; marca *warnings* |
-| Tests | Runner integrado **`node:test`** (80 tests) | Sin dependencias de testing |
+| Tests | Runner integrado **`node:test`** (90 tests) | Sin dependencias de testing |
 
 Para migrar a una base de datos real basta con implementar `Repository<T>`
 (`backend/storage/repository.ts`) con otro backend y cambiar las instancias en
@@ -56,14 +56,16 @@ calculadora-honorarios/
 │   ├── feeCalculator.ts      # motor de cálculo final (adjunta la referencia histórica)
 │   ├── caseEstimator.ts      # estima horas+honorarios desde una descripción
 │   ├── referencePricing.ts   # benchmarks de precios por área (acuerdos aprobados)
+│   ├── valuationCriteria.ts  # criterios de valoración por materia (fases, fijo por actuación, éxito fijo…)
 │   ├── batchImport.ts        # importación masiva de documentos desde carpeta
 │   ├── plannedActionsBreakdown.ts  # desglose de actuaciones (valor alta/media/baja)
 │   └── wordBreakdownExporter.ts    # exporta el desglose a .docx (ZIP/OOXML sin deps)
 ├── frontend/                 # SPA: 7 secciones + subida multi-archivo + desglose editable
 ├── admin/                    # seed.ts (datos mock) · reset.ts · import.ts (importación masiva)
 ├── data/                     # almacenamiento JSON (NO versionado salvo service_categories)
-├── tests/                    # 80 tests + fixtures/ (PDF nativo, PDF escaneado, imagen)
+├── tests/                    # 90 tests + fixtures/ (PDF nativo, PDF escaneado, imagen)
 └── docs/                     # ARCHITECTURE, DATA_FLOW, DATA_MODELS, CONTRACTS
+    └── propuestas/           # propuestas de referencia versionadas (criterios de valoración)
 ```
 
 > **Confidencialidad:** `.gitignore` excluye todo `data/*` salvo el catálogo de categorías
@@ -87,7 +89,7 @@ npm start          # arranca en http://localhost:3000
 Otros comandos:
 
 ```bash
-npm test           # ejecuta los 80 tests (node:test)
+npm test           # ejecuta los 90 tests (node:test)
 npm run reset      # vacía todos los repos
 npm run dev        # arranca con --watch (recarga al guardar)
 npm run import     # importación masiva desde data/inbox/
@@ -202,6 +204,32 @@ la sección **Desglose de actuaciones**.
 - Módulos: `services/plannedActionsBreakdown.ts`, `services/wordBreakdownExporter.ts`;
   rutas `GET|POST /api/breakdowns`, `GET|PUT|DELETE /api/breakdowns/:id`, `POST /api/breakdowns/:id/export-word`.
 
+### 5.9 Criterios de valoración por materia
+
+Algunas materias no se retribuyen por "horas × tarifa", sino por **criterios propios** que
+describen las propuestas del despacho: encargos **por fases** con honorario autónomo, **fijos
+por actuación** (p. ej. por demanda o querella), **comisiones de éxito de cantidad fija** por
+resultados no dinerarios, **provisiones a cuenta**, ponderaciones por naturaleza de la acción,
+etc. Estos criterios se capturan de forma estructurada en
+[`services/valuationCriteria.ts`](services/valuationCriteria.ts), con su **fuente canónica**
+en un documento versionado bajo [`docs/propuestas/`](docs/propuestas/).
+
+Cuando **Describir caso** detecta una de estas materias, la herramienta **adjunta y muestra**,
+junto a la estimación por horas (que sigue siendo el rango numérico), un **cuadro de criterios
+y honorarios de referencia** de la materia y avisa de que se estructura de forma propia. No
+reescribe el motor: lo **encuadra y justifica** (Reglas 1, 9, 10, 18). Los importes son
+**referencias** de propuestas reales anonimizadas, orientativas y revisables (Regla 12).
+
+- Materia incorporada: **Asesoramiento corporativo → Conflictos Societarios** (defensa de la
+  minoría; retribución del administrador —arts. 217/249 LSC, doctrina del vínculo, STS
+  26/02/2018—; convocatoria y quórum; dividendos/reservas y abuso de la mayoría —arts. 348 bis
+  y 204 LSC—). Fuente: [`docs/propuestas/conflictos-societarios.md`](docs/propuestas/conflictos-societarios.md).
+- La misma lógica está reflejada en la versión web de un solo archivo
+  (`Calculadora-Honorarios-OFFLINE.html`) y sus copias de despliegue.
+- Para añadir una nueva materia con criterios: crea su documento en `docs/propuestas/`, añade la
+  entrada a `MATTER_CRITERIA` (backend) y su espejo `VALUATION_CRITERIA` (web), y las palabras
+  clave de la subcategoría en `services/serviceClassifier.ts`.
+
 ---
 
 ## 6. API (resumen)
@@ -218,14 +246,15 @@ la sección **Desglose de actuaciones**.
 
 ---
 
-## 7. Tests (80/80 ✓)
+## 7. Tests (90/90 ✓)
 
-`npm test` ejecuta los 80 tests con `node:test`. Cubren: extracción y degradación elegante,
+`npm test` ejecuta los 90 tests con `node:test`. Cubren: extracción y degradación elegante,
 estados de revisión, no-invención de datos, trazabilidad, generación/aprobación de fórmulas,
 aritmética del motor (10 h → 2.500 €; alta → ×1,30; urgente → ×1,20; descuentos; rangos),
 uso de la tarifa base, persistencia del historial, estimación desde descripción
 (`case-estimator`), referencias por área, importación, navegación, y el **desglose de
-actuaciones** (`planned-actions.test.ts`) con su **exportación a Word** (`word-breakdown.test.ts`).
+actuaciones** (`planned-actions.test.ts`) con su **exportación a Word** (`word-breakdown.test.ts`),
+y los **criterios de valoración por materia** (`valuation-criteria.test.ts`).
 
 ---
 
