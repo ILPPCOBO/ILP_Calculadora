@@ -321,3 +321,93 @@ export interface ExportedBreakdownDocument {
   generated_by: string;
   file_path: string;                       // ruta relativa bajo data/exports
 }
+
+// ----------------------------------------------------------------------------
+// Propuesta de honorarios ("Generar propuesta")
+// ----------------------------------------------------------------------------
+// Ensambla una PROPUESTA profesional a partir de una estimación/cálculo (sus
+// cifras vienen del caseEstimator/feeCalculator; aquí NO se inventan importes) y,
+// opcionalmente, de un desglose de actuaciones. Dos formatos: sencilla (carta,
+// 2–4 pp) y elaborada (dossier, 10+ pp). Los datos ausentes se marcan con "[●]".
+
+/** Formato de la propuesta. */
+export type ProposalKind = 'simple' | 'elaborate';
+export const PROPOSAL_KIND_VALUES: ProposalKind[] = ['simple', 'elaborate'];
+
+/** Etiqueta en español de cada formato. */
+export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
+  simple: 'Propuesta sencilla',
+  elaborate: 'Propuesta elaborada',
+};
+
+/** Parte interviniente (firma o cliente). Datos ausentes = null (regla 12). */
+export interface ProposalParty {
+  role: 'firm' | 'client';
+  name: string | null;
+  legal_form: string | null;               // S.L., S.A., particular…
+  tax_id: string | null;                   // CIF/NIF
+  address: string | null;
+  representative: string | null;
+}
+
+/** Sección redactada de la propuesta (encabezado + cuerpo, editables). */
+export interface ProposalSection {
+  id: string;
+  key: string;                             // clave estable: 'objeto', 'alcance', 'honorarios'…
+  heading: string;                         // título mostrado ("4. Objeto del encargo")
+  body: string;                            // texto; líneas "- " => viñetas; "[●]" = dato ausente
+  client_visible: boolean;                 // false => nota interna, no se envía al cliente
+}
+
+/** Propuesta de honorarios completa, vinculada a una estimación/cálculo. */
+export interface FeeProposal {
+  id: string;
+  kind: ProposalKind;                      // simple | elaborate
+  case_or_calculation_id: string | null;
+  breakdown_id: string | null;             // desglose de actuaciones vinculado, si lo hay
+  service_category: string;
+  service_subcategory: string | null;
+  title: string;
+  reference: string | null;                // referencia interna
+  date: string;                            // ISO de la fecha de la propuesta
+  confidential: boolean;
+  firm: ProposalParty;
+  client: ProposalParty;
+  // Economía (cifras heredadas de la estimación; NUNCA inventadas, regla 12).
+  currency: string;
+  rate_used: number | null;
+  hours_min: number | null;
+  hours_recommended: number | null;
+  hours_max: number | null;
+  fee_min: number | null;
+  fee_recommended: number | null;
+  fee_max: number | null;
+  vat_included: boolean;                   // por defecto false (IVA no incluido, regla 9)
+  expenses_included: boolean;              // por defecto false (suplidos aparte)
+  validity_days: number | null;
+  // Alcance.
+  included_elements: string[];
+  excluded_services: string[];
+  billing_terms: string | null;
+  // Contenido redactado.
+  sections: ProposalSection[];
+  // Procedencia y cautelas.
+  confidence_level: ConfidenceLevel;       // heredada de la estimación (baja en baseline)
+  assumptions: string[];
+  missing_information: string[];           // marcadores [●] usados / datos por confirmar
+  warnings: string[];
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+}
+
+/** Registro de un .docx generado a partir de una propuesta. */
+export interface ExportedProposalDocument {
+  id: string;
+  proposal_id: string;
+  file_name: string;
+  file_type: 'docx';
+  generated_at: string;
+  generated_by: string;
+  file_path: string;                       // ruta relativa bajo data/exports
+}

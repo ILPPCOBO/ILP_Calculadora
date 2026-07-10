@@ -21,9 +21,9 @@ test('"Panel" / dashboard ya NO aparece en el menú', () => {
   assert.ok(!/>\s*Panel\s*</.test(indexHtml), 'no debe quedar el enlace "Panel"');
 });
 
-test('el menú tiene exactamente las 7 secciones esperadas en orden', () => {
+test('el menú tiene exactamente las 8 secciones esperadas en orden', () => {
   const routes = [...indexHtml.matchAll(/data-route="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepStrictEqual(routes, ['describe-case', 'upload', 'records', 'areas', 'calculator', 'planned-actions', 'history']);
+  assert.deepStrictEqual(routes, ['describe-case', 'upload', 'records', 'areas', 'calculator', 'planned-actions', 'proposals', 'history']);
 });
 
 test('app.js: la ruta inicial por defecto es describe-case y ya no usa dashboard.js', () => {

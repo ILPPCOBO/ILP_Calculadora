@@ -194,11 +194,44 @@ function renderResult(box, res, input) {
 
     <div class="btn-row mt-16">
       <button class="btn" id="btn-breakdown">Generar desglose de actuaciones previstas</button>
+      <button class="btn btn-primary" id="btn-proposal">Generar propuesta de honorarios</button>
     </div>
   `;
 
   const bd = box.querySelector('#btn-breakdown');
   if (bd) bd.addEventListener('click', () => generateBreakdownFromCalc(bd, out, input));
+  const bp = box.querySelector('#btn-proposal');
+  if (bp) bp.addEventListener('click', () => generateProposalFromCalc(bp, out, input));
+}
+
+/** Crea una propuesta de honorarios a partir de este cálculo manual y abre la pantalla. */
+async function generateProposalFromCalc(btn, out, input) {
+  if (out.needs_input) { toast('Completa el cálculo antes de generar la propuesta.', 'warn'); return; }
+  btn.disabled = true; const t = btn.textContent; btn.textContent = 'Generando…';
+  try {
+    const rate = (out.breakdown && out.breakdown.effective_hourly_rate) || input.hourly_rate || BASE_HOURLY_RATE;
+    const prop = await api.createProposal({
+      kind: 'simple',
+      case_or_calculation_id: out.calculation_id || null,
+      service_category: out.service_category || input.service_category,
+      service_subcategory: out.service_subcategory || input.service_subcategory || null,
+      description: null,
+      tasks: [],
+      currency: out.currency || 'EUR',
+      rate_used: rate,
+      hours_recommended: input.estimated_hours ?? null,
+      fee_min: out.calculated_min ?? null,
+      fee_recommended: out.calculated_recommended ?? null,
+      fee_max: out.calculated_max ?? null,
+      confidence_level: out.confidence_level || 'low',
+      created_by: 'usuario_interno',
+    });
+    toast('Propuesta generada.', 'ok');
+    location.hash = `#/proposals?id=${encodeURIComponent(prop.id)}`;
+  } catch (err) {
+    toast(err.message, 'error', 'Error');
+    btn.textContent = t; btn.disabled = false;
+  }
 }
 
 /** Crea un desglose de actuaciones asociado a este cálculo manual y abre la pantalla. */

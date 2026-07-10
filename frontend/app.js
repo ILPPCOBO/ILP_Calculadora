@@ -29,6 +29,7 @@ const ROUTES = {
   areas: { title: 'Organizar por área', loader: () => import('/pages/byArea.js') },
   calculator: { title: 'Calculadora', loader: () => import('/pages/calculator.js') },
   'planned-actions': { title: 'Desglose de actuaciones', loader: () => import('/pages/plannedActions.js') },
+  proposals: { title: 'Propuesta de honorarios', loader: () => import('/pages/proposals.js') },
   history: { title: 'Historial', loader: () => import('/pages/history.js') },
 };
 const DEFAULT_ROUTE = 'describe-case';
@@ -148,6 +149,14 @@ export const api = {
   updateBreakdown: (id, patch) => request(`/breakdowns/${encodeURIComponent(id)}`, { method: 'PUT', body: patch }),
   deleteBreakdown: (id) => request(`/breakdowns/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   exportBreakdownWord: (id, payload = {}) => request(`/breakdowns/${encodeURIComponent(id)}/export-word`, { method: 'POST', body: payload }),
+
+  // Propuesta de honorarios.
+  createProposal: (input) => request('/proposals', { method: 'POST', body: input }),
+  listProposals: () => request('/proposals'),
+  getProposal: (id) => request(`/proposals/${encodeURIComponent(id)}`),
+  updateProposal: (id, patch) => request(`/proposals/${encodeURIComponent(id)}`, { method: 'PUT', body: patch }),
+  deleteProposal: (id) => request(`/proposals/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  exportProposalWord: (id, payload = {}) => request(`/proposals/${encodeURIComponent(id)}/export-word`, { method: 'POST', body: payload }),
 };
 
 // =========================================================================

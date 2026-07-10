@@ -23,5 +23,9 @@ data/planned_action_breakdowns/*
 !data/planned_action_breakdowns/.gitkeep
 data/exported_breakdown_documents/*
 !data/exported_breakdown_documents/.gitkeep
+data/fee_proposals/*
+!data/fee_proposals/.gitkeep
+data/exported_proposal_documents/*
+!data/exported_proposal_documents/.gitkeep
 data/exports/*
 !data/exports/.gitkeep

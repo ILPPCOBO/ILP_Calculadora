@@ -14,6 +14,7 @@ import { handleReferences } from './references.ts';
 import { handleImport } from './imports.ts';
 import { handleEstimateCase } from './describe.ts';
 import { handleBreakdowns } from './breakdowns.ts';
+import { handleProposals } from './proposals.ts';
 import { ok, notFound } from './helpers.ts';
 import type { RouteContext, RouteResult } from './helpers.ts';
 
@@ -65,6 +66,9 @@ export async function dispatch(ctx: RouteContext): Promise<RouteResult> {
 
     case 'breakdowns':
       return handleBreakdowns(ctx);
+
+    case 'proposals':
+      return handleProposals(ctx);
 
     default:
       return notFound(`Ruta /api/${ctx.segments.join('/')} no encontrada.`);

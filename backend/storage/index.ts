@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { JsonRepository } from './repository.ts';
 import type {
   UploadedDocument, ExtractedWorkRecord, ServiceCategory, PricingFormula, FeeCalculation,
-  PlannedActionBreakdown, ExportedBreakdownDocument,
+  PlannedActionBreakdown, ExportedBreakdownDocument, FeeProposal, ExportedProposalDocument,
 } from '../models/index.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +43,12 @@ export const breakdownsRepo = new JsonRepository<PlannedActionBreakdown>(dataDir
 /** Documentos .docx generados a partir de un desglose (metadatos + ruta). */
 export const exportedDocsRepo = new JsonRepository<ExportedBreakdownDocument>(dataDir('exported_breakdown_documents'));
 
+/** Propuestas de honorarios generadas (cada una embebe sus secciones). */
+export const proposalsRepo = new JsonRepository<FeeProposal>(dataDir('fee_proposals'));
+
+/** Documentos .docx generados a partir de una propuesta (metadatos + ruta). */
+export const proposalDocsRepo = new JsonRepository<ExportedProposalDocument>(dataDir('exported_proposal_documents'));
+
 export const repos = {
   documents: documentsRepo,
   records: recordsRepo,
@@ -52,4 +58,6 @@ export const repos = {
   calculations: calculationsRepo,
   breakdowns: breakdownsRepo,
   exportedDocs: exportedDocsRepo,
+  proposals: proposalsRepo,
+  proposalDocs: proposalDocsRepo,
 };

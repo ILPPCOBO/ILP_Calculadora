@@ -163,11 +163,45 @@ function renderEstimate(box, e) {
 
     <div class="btn-row mt-16">
       <button class="btn" id="btn-breakdown">Generar desglose de actuaciones previstas</button>
+      <button class="btn btn-primary" id="btn-proposal">Generar propuesta de honorarios</button>
     </div>
   `;
 
   const bd = box.querySelector('#btn-breakdown');
   if (bd) bd.addEventListener('click', () => generateBreakdownFromEstimate(bd, e));
+  const bp = box.querySelector('#btn-proposal');
+  if (bp) bp.addEventListener('click', () => generateProposalFromEstimate(bp, e));
+}
+
+/** Crea una propuesta de honorarios a partir de esta estimación y abre la pantalla. */
+async function generateProposalFromEstimate(btn, e) {
+  btn.disabled = true; const t = btn.textContent; btn.textContent = 'Generando…';
+  try {
+    const desc = document.getElementById('c-desc')?.value?.trim() || null;
+    const prop = await api.createProposal({
+      kind: 'simple',
+      case_or_calculation_id: e.calculation_id || null,
+      service_category: e.service_detected,
+      service_subcategory: e.service_subcategory || null,
+      description: desc,
+      tasks: e.tasks || [],
+      currency: e.currency,
+      rate_used: e.rate_used,
+      hours_min: e.hours_min,
+      hours_recommended: e.hours_recommended,
+      hours_max: e.hours_max,
+      fee_min: e.fee_min,
+      fee_recommended: e.fee_recommended,
+      fee_max: e.fee_max,
+      confidence_level: e.confidence_level,
+      created_by: 'usuario_interno',
+    });
+    toast('Propuesta generada.', 'ok');
+    location.hash = `#/proposals?id=${encodeURIComponent(prop.id)}`;
+  } catch (err) {
+    toast(err.message, 'error', 'Error');
+    btn.textContent = t; btn.disabled = false;
+  }
 }
 
 /** Crea un desglose de actuaciones asociado a esta estimación y abre la pantalla. */
