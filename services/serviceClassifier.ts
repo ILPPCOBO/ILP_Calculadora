@@ -300,14 +300,29 @@ function normalize(text: string): string {
   return ` ${lowered} `;
 }
 
-/** Cuenta cuántas veces aparece `needle` (ya normalizado) en `haystack`. */
+/** Escapa los metacaracteres de expresión regular en `s`. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Cuenta cuántas veces aparece `needle` (ya normalizado) en `haystack` exigiendo
+ * LÍMITE DE PALABRA a ambos lados: la keyword sólo cuenta si va precedida por el
+ * inicio de la cadena o un carácter no alfanumérico, y seguida por el fin de la
+ * cadena o un carácter no alfanumérico. Evita los falsos positivos por subcadena
+ * (p.ej. la clave "ere" dentro de "derecho", "mica" dentro de "quimica" o "spa"
+ * dentro de "espacio"). Réplica exacta de la versión web (función countOcc) para
+ * mantener la paridad app↔web.
+ */
 function countOccurrences(haystack: string, needle: string): number {
   if (!needle) return 0;
+  const re = new RegExp(`(^|[^a-z0-9])${escapeRegExp(needle)}([^a-z0-9]|$)`, 'g');
   let count = 0;
-  let idx = haystack.indexOf(needle);
-  while (idx !== -1) {
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(haystack)) !== null) {
     count += 1;
-    idx = haystack.indexOf(needle, idx + needle.length);
+    // No consumimos el límite posterior: puede servir de límite previo del siguiente.
+    re.lastIndex = m.index + m[1].length + needle.length;
   }
   return count;
 }
