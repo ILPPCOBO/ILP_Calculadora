@@ -113,28 +113,20 @@ function buildDocumentXml(p: FeeProposal, opts: ExportOptions): string {
   const firm = (opts.firmName || p.firm.name || 'ILP Abogados').trim();
   const body: string[] = [];
 
-  // --- Encabezado ---
-  body.push(para(run(p.title || 'Propuesta de honorarios profesionales', { bold: true, color: NAVY, size: 20 }), { align: 'center', spaceAfter: 40 }));
+  // --- Encabezado tipo carta ---
+  body.push(para(run(firm, { bold: true, color: NAVY, size: 16 }), { spaceAfter: 20 }));
+  body.push(para(run(fmtDateEs(p.date), { color: GRAY, size: 10 }), { align: 'right', spaceAfter: 40 }));
+  body.push(para(run('PROPUESTA DE HONORARIOS PROFESIONALES', { bold: true, color: NAVY, size: 15 }), { spaceAfter: 30 }));
   body.push(para(
-    run(`${p.service_category}${p.service_subcategory ? ` / ${p.service_subcategory}` : ''}`, { italic: true, color: GRAY, size: 11 }),
-    { align: 'center', spaceAfter: 40 },
+    run(`${p.service_category}${p.service_subcategory ? ` / ${p.service_subcategory}` : ''}   ·   ${KIND_LABEL[p.kind] || p.kind}`, { italic: true, color: GRAY, size: 10 }),
+    { spaceAfter: 160 },
   ));
-  body.push(para(
-    run(`${firm}`, { color: GOLD, bold: true, size: 10 })
-    + run(`   ·   ${KIND_LABEL[p.kind] || p.kind}   ·   ${fmtDateEs(p.date)}`, { color: GRAY, size: 10 }),
-    { align: 'center', spaceAfter: 120 },
-  ));
-
-  // --- Partes ---
-  body.push(partyBlock('Firma', p.firm.name, p.firm.tax_id, p.firm.representative));
-  body.push(partyBlock('Cliente', p.client.name, p.client.tax_id, p.client.representative));
-  if (p.reference) {
-    body.push(para(run('Referencia: ', { bold: true, color: NAVY, size: 10 }) + run(p.reference, { color: INK, size: 10 }), { spaceAfter: 120 }));
-  }
 
   // --- Secciones ---
+  // Los apartados numerados llevan su título; los estructurales (destinatario,
+  // apertura, cierre, aceptación) van sin título, como en una carta.
   for (const s of p.sections as ProposalSection[]) {
-    body.push(heading1(s.heading));
+    if (/^\d+\./.test(s.heading)) body.push(heading1(s.heading));
     body.push(renderBody(s.body));
   }
 

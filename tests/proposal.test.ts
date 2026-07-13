@@ -41,12 +41,15 @@ test('generateProposal (sencilla): estructura básica + cifras heredadas, no inv
   assert.equal(p.kind, 'simple');
   assert.equal(p.id.startsWith('prop_'), true);
   const keys = p.sections.map((s) => s.key);
-  for (const k of ['objeto', 'alcance', 'exclusiones', 'honorarios', 'gastos', 'aceptacion', 'firma']) {
+  for (const k of ['destinatario', 'apertura', 'objeto', 'equipo', 'honorarios', 'devengo', 'gastos', 'condiciones', 'aceptacion']) {
     assert.ok(keys.includes(k), `falta la sección "${k}"`);
   }
   const hon = p.sections.find((s) => s.key === 'honorarios')!;
   assert.ok(hon.body.includes('4.000'), 'el honorario recomendado (4.000) aparece en el cuerpo');
-  assert.ok(hon.body.includes('IVA'), 'advierte que no incluye IVA (Regla 9)');
+  assert.ok(hon.body.includes('IVA y gastos no incluidos'), 'advierte que no incluye IVA ni gastos (Regla 9)');
+  // Términos definidos en negrita, como en las propuestas reales.
+  const apertura = p.sections.find((s) => s.key === 'apertura')!;
+  assert.ok(/\*\*«Propuesta»\*\*/.test(apertura.body), 'define «Propuesta» en negrita');
 });
 
 test('generateProposal: sin importe => marcador [●], nunca inventa (Regla 12)', () => {
@@ -68,22 +71,22 @@ test('marcadores nominales: se rellenan automáticamente con los datos de la pro
   const p = createProposal(baseInput(), 'tester');
   created.push(p.id);
   // Sin cliente/referencia/validez: el cuerpo muestra los marcadores nominales.
-  const objBefore = getProposal(p.id).sections.find((s) => s.key === 'objeto').body;
-  assert.ok(objBefore.includes('[cliente]'), 'el marcador [cliente] está presente antes de rellenar');
+  const aperturaBefore = getProposal(p.id).sections.find((s) => s.key === 'apertura').body;
+  assert.ok(aperturaBefore.includes('[cliente]'), 'el marcador [cliente] está presente antes de rellenar');
 
   const upd = updateProposal(p.id, {
     client: { name: 'Bodega Ejemplo, S.L.', representative: 'Ana López' },
     reference: 'REF-2026-001', validity_days: 30,
   });
-  const obj = upd.sections.find((s) => s.key === 'objeto').body;
-  assert.ok(obj.includes('Bodega Ejemplo, S.L.'), 'el nombre del cliente reemplaza al marcador');
-  assert.ok(!obj.includes('[cliente]'), 'el marcador [cliente] ya no aparece tras rellenar');
+  const apertura = upd.sections.find((s) => s.key === 'apertura').body;
+  assert.ok(apertura.includes('Bodega Ejemplo, S.L.'), 'el nombre del cliente reemplaza al marcador');
+  assert.ok(!apertura.includes('[cliente]'), 'el marcador [cliente] ya no aparece tras rellenar');
+  assert.ok(apertura.includes('Ana López'), 'el representante rellena el saludo (Estimado/a …)');
 
-  const val = upd.sections.find((s) => s.key === 'validez').body;
-  assert.ok(/30 días/.test(val), 'la validez rellena el marcador');
-  const enc = upd.sections.find((s) => s.key === 'encabezado').body;
-  assert.ok(enc.includes('REF-2026-001'), 'la referencia rellena el marcador');
-  assert.ok(enc.includes('Ana López'), 'el representante rellena el marcador');
+  const cond = upd.sections.find((s) => s.key === 'condiciones').body;
+  assert.ok(/30 días/.test(cond), 'la validez rellena el marcador en condiciones');
+  const dest = upd.sections.find((s) => s.key === 'destinatario').body;
+  assert.ok(dest.includes('REF-2026-001'), 'la referencia (N/ref.) rellena el marcador');
   // Al rellenar, deja de figurar como pendiente.
   assert.ok(!upd.missing_information.some((m) => /Referencia/i.test(m)), 'la referencia ya no está pendiente');
 });
@@ -92,11 +95,11 @@ test('generateProposal (elaborada): añade secciones de dossier', () => {
   const p = generateProposal(baseInput({ kind: 'elaborate' }));
   assert.equal(p.kind, 'elaborate');
   const keys = p.sections.map((s) => s.key);
-  for (const k of ['portada', 'presentacion_firma', 'metodologia', 'fases', 'premisas', 'anexos']) {
+  for (const k of ['presentacion', 'metodologia', 'credenciales', 'premisas', 'cronograma', 'anexo_economico']) {
     assert.ok(keys.includes(k), `la elaborada debe incluir "${k}"`);
   }
   // Sigue conteniendo el núcleo económico y de aceptación.
-  assert.ok(keys.includes('honorarios') && keys.includes('firma'));
+  assert.ok(keys.includes('honorarios') && keys.includes('aceptacion'));
 });
 
 test('low confidence => warning de cifras orientativas (Regla 1)', () => {
@@ -112,9 +115,9 @@ test('exportProposalDocx: genera un .docx (ZIP válido) con el contenido esperad
   assert.equal(buffer[0], 0x50); assert.equal(buffer[1], 0x4b);            // "PK\x03\x04"
   assert.ok(buffer.includes(Buffer.from([0x50, 0x4b, 0x05, 0x06])), 'falta el EOCD del ZIP');
   const xml = buffer.toString('utf8');
-  assert.ok(xml.includes('Propuesta de honorarios profesionales'));
+  assert.ok(/PROPUESTA DE HONORARIOS PROFESIONALES/i.test(xml));
   assert.ok(xml.includes('Honorarios profesionales'));
-  assert.ok(xml.includes('Servicios excluidos'));
+  assert.ok(xml.includes('Gastos, suplidos e impuestos'));
   assert.ok(xml.includes('4.000'), 'el importe aparece en el documento');
 });
 

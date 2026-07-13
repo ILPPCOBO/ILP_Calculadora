@@ -41,6 +41,22 @@ const DM = {
   validity: '[validez en días]',
 };
 
+/**
+ * Huecos ("blanks") case-specific que el abogado completa a mano: modalidad de
+ * éxito, provisión de fondos e hitos de devengo. No se rellenan solos porque
+ * dependen del criterio profesional; quedan como marcadores visibles.
+ */
+const FB = {
+  exito: '[importe de la comisión de éxito]',
+  exitoHecho: '[hecho que devenga la comisión de éxito]',
+  provision: '[importe de la provisión de fondos]',
+  hitos: '[hitos de devengo]',
+  socio: '[cargo del firmante, p. ej. socio/a]',
+};
+
+/** Nombre de la firma (identidad de la casa). */
+const FIRM = 'ILP Abogados';
+
 export interface ProposalPartyInput {
   name?: string | null;
   legal_form?: string | null;
@@ -195,9 +211,8 @@ function computeMissing(f: MissingFields): string[] {
   if (!f.client.name) m.push('Identificación del Cliente (nombre, CIF/NIF y domicilio).');
   else if (!f.client.tax_id) m.push('CIF/NIF del Cliente.');
   if (f.fee_recommended === null) m.push('Importe de los honorarios.');
-  if (!f.reference) m.push('Referencia interna de la propuesta.');
+  if (!f.reference) m.push('Referencia interna (N/ref.) de la propuesta.');
   if (f.validity_days === null) m.push('Validez temporal de la propuesta (días).');
-  if (!f.billing_terms) m.push('Calendario de facturación y cuenta bancaria.');
   if (!f.firm.representative) m.push('Firmante responsable por la Firma.');
   return m;
 }
@@ -211,6 +226,7 @@ interface RawSection { key: string; heading: string; body: string; client_visibl
 interface Ctx {
   kind: ProposalKind;
   serviceLabel: string;
+  asunto: string;
   currency: string;
   rate: number | null;
   hoursRec: number | null; hoursMin: number | null; hoursMax: number | null;
@@ -225,249 +241,202 @@ interface Ctx {
   billingTerms: string | null;
 }
 
-function feeParagraph(c: Ctx): string {
-  const base = c.feeRec === null
-    ? `Los honorarios profesionales por el presente encargo se cifran en ${PH} (a concretar).`
-    : `Los honorarios profesionales por el presente encargo se estiman en ${money(c.feeRec, c.currency)}`
-      + `, con un rango orientativo entre ${money(c.feeMin, c.currency)} y ${money(c.feeMax, c.currency)}`
-      + `, sobre la base de una dedicación estimada de ${c.hoursRec ?? PH} horas y una tarifa de ${c.rate ?? PH} €/hora.`;
-  const lines = [base];
-  lines.push(
-    'Los honorarios indicados no incluyen el Impuesto sobre el Valor Añadido (IVA), que se repercutirá al '
-    + 'tipo legal vigente, ni los gastos y suplidos, que se facturarán por separado.',
-  );
-  if (c.lowConfidence) {
-    lines.push(
-      'La presente cifra es orientativa y revisable: se ha calculado a partir de parámetros de referencia y '
-      + 'quedará sujeta a confirmación una vez definido el alcance definitivo del encargo (honorarios sugeridos, '
-      + 'no vinculantes).',
-    );
-  }
-  return lines.join('\n\n');
+function firmName(c: Ctx): string {
+  return c.firm && c.firm.name ? c.firm.name : FIRM;
 }
 
-function commonSections(c: Ctx): RawSection[] {
-  const s: RawSection[] = [];
+/** Párrafo de honorarios al estilo de las propuestas reales (fijo + variable de éxito). */
+function feeSentence(c: Ctx): string {
+  const fijo = c.feeRec != null ? money(c.feeRec, c.currency) : PH;
+  let s = `Por los servicios descritos en el apartado anterior, ${firmName(c)} facturará unos honorarios profesionales `
+    + `de ${fijo} fijos (IVA y gastos no incluidos)`;
+  if (c.lowConfidence && c.feeRec != null) {
+    s += `. La cifra anterior es orientativa y revisable, dentro de un rango estimado de entre `
+      + `${money(c.feeMin, c.currency)} y ${money(c.feeMax, c.currency)}`;
+  }
+  s += `. Podrá pactarse, además, un variable de éxito de ${FB.exito}, que se devengará ${FB.exitoHecho}.`;
+  return s + '\n\n'
+    + 'Los honorarios comprenden la totalidad de las actuaciones descritas en el apartado de objeto; cualquier '
+    + 'actuación no prevista expresamente será objeto de presupuesto separado.';
+}
+
+/** Cuerpo de "Objeto y descripción del servicio". */
+function buildObjeto(c: Ctx): string {
+  const parts: string[] = [];
+  parts.push(`Los servicios a desarrollar por ${firmName(c)} comprenderán las tareas y trabajos relativos a la materia `
+    + `de ${c.serviceLabel.toLowerCase()} objeto del presente encargo.`);
+  if (c.description) parts.push(c.description);
+  const scope = [...c.included, ...c.tasks];
+  parts.push(scope.length
+    ? 'En particular, el encargo comprende las siguientes actuaciones:\n' + bullets(scope, '')
+    : 'En particular, el encargo comprende: [detallar el alcance de los servicios].');
+  if (c.excluded.length) {
+    parts.push('Quedan expresamente excluidas del presente encargo, salvo pacto adicional por escrito: '
+      + c.excluded.join('; ') + '.');
+  }
+  return parts.join('\n\n');
+}
+
+/** Cuerpo de "Devengo de los honorarios y provisión de fondos" (hitos + provisión). */
+function buildDevengo(c: Ctx): string {
+  const scope = [...c.included, ...c.tasks];
+  const hitos = scope.length
+    ? 'Los honorarios fijos se devengarán conforme a los siguientes hitos, sin perjuicio de su ajuste de común '
+      + 'acuerdo con el Cliente:\n' + scope.map((t) => `- ${t}: [importe]`).join('\n')
+    : 'Los honorarios fijos se devengarán conforme a los siguientes hitos, sin perjuicio de su ajuste de común '
+      + `acuerdo con el Cliente: ${FB.hitos}.`;
+  return hitos + '\n\n'
+    + `A la aceptación de esta Propuesta, el Cliente abonará una provisión de fondos de ${FB.provision}, imputable `
+    + 'a los honorarios conforme se vayan devengando.\n\n'
+    + 'Le agradeceríamos que, al efectuar el pago, su nombre (o el de su empresa) y el número de la presente '
+    + 'Propuesta queden claramente recogidos en el concepto, a fin de garantizar un correcto seguimiento.';
+}
+
+/** Anexo económico (formato elaborado): resume las cifras de la calculadora. */
+function buildAnexo(c: Ctx): string {
+  return `- Honorarios fijos: ${c.feeRec != null ? money(c.feeRec, c.currency) : PH} (IVA y gastos no incluidos).\n`
+    + `- Rango orientativo: ${c.feeMin != null ? money(c.feeMin, c.currency) : PH} – ${c.feeMax != null ? money(c.feeMax, c.currency) : PH}.\n`
+    + `- Tarifa horaria de referencia: ${c.rate != null ? `${c.rate} €/hora` : PH}.\n`
+    + `- Dedicación estimada: ${c.hoursRec != null ? `${c.hoursRec} horas` : PH}.\n`
+    + `- Variable de éxito: ${FB.exito} (${FB.exitoHecho}).\n`
+    + `- Provisión de fondos a la firma: ${FB.provision}.`;
+}
+
+/** Secciones comunes al estilo carta de las propuestas reales (ILP / {m}). */
+function letterSections(c: Ctx): RawSection[] {
   const clientName = c.client.name || DM.client;
-  const firmName = nameOr(c.firm, 'la Firma');
+  const clientRep = c.client.representative || DM.clientRep;
+  const s: RawSection[] = [];
+
+  // Destinatario (N/ref., A la atención de, Asunto).
+  s.push({
+    key: 'destinatario', numbered: false, heading: 'Destinatario',
+    body: [`N/ref.: ${DM.reference}`, `A la atención de: ${clientName}`,
+      `Asunto: ${c.asunto.charAt(0).toUpperCase()}${c.asunto.slice(1)}`].join('\n'),
+  });
+
+  // Apertura con términos definidos en negrita.
+  s.push({
+    key: 'apertura', numbered: false, heading: 'Apertura',
+    body: `Estimado/a ${clientRep}:\n\n`
+      + `Atendiendo a su solicitud, ${firmName(c)} (en adelante, «ILP» o el **«Despacho»**) se complace en remitirle la `
+      + `presente propuesta de honorarios profesionales (en adelante, la **«Propuesta»**), elaborada exclusivamente `
+      + `para ${clientName} (en adelante, el **«Cliente»**) y de carácter confidencial.`,
+  });
+
+  s.push({ key: 'objeto', heading: 'Objeto y descripción del servicio', body: buildObjeto(c) });
 
   s.push({
-    key: 'encabezado', numbered: false,
-    heading: 'Encabezado',
-    body: [
-      dateEs(c.dateIso),
-      `A la atención de: ${clientName}`,
-      `Representante: ${DM.clientRep}   ·   CIF/NIF: ${DM.cif}`,
-      `Referencia: ${DM.reference}`,
-      `Asunto: Propuesta de honorarios profesionales — ${c.serviceLabel}`,
-    ].join('\n'),
+    key: 'equipo', heading: 'Equipo de trabajo',
+    body: `Los servicios descritos serán dirigidos por ${c.firm.representative || DM.firmRep}, ${FB.socio}, y serán `
+      + `prestados por un equipo multidisciplinar adaptado a las necesidades del asunto, con las incorporaciones que en `
+      + 'cada momento se requieran.',
+  });
+
+  s.push({ key: 'honorarios', heading: 'Honorarios profesionales', body: feeSentence(c) });
+
+  s.push({ key: 'devengo', heading: 'Devengo de los honorarios y provisión de fondos', body: buildDevengo(c) });
+
+  s.push({
+    key: 'gastos', heading: 'Gastos, suplidos e impuestos',
+    body: 'Los honorarios anteriores no comprenden los gastos y suplidos que la actuación genere (entre otros, '
+      + 'aranceles registrales y notariales, tasas, honorarios de peritos o auditores y gastos de desplazamiento), que '
+      + 'se repercutirán de forma independiente y previa justificación. A todas las cantidades se añadirán los '
+      + 'impuestos que legalmente resulten aplicables. Quedan excluidas de esta Propuesta las actuaciones ajenas al '
+      + 'objeto descrito, así como la eventual ejecución de resoluciones o la interposición de recursos '
+      + 'extraordinarios, que serán objeto de presupuesto separado.',
   });
 
   s.push({
-    key: 'confidencial', numbered: false,
-    heading: 'Carácter confidencial',
-    body: 'Documento confidencial. La presente propuesta se dirige exclusivamente a su destinatario y no podrá '
-      + 'ser divulgada a terceros sin el consentimiento previo de la Firma.',
-  });
-
-  s.push({
-    key: 'antecedentes',
-    heading: 'Antecedentes',
-    body: c.description
-      ? c.description
-      : `El Cliente ha solicitado a la Firma asesoramiento en relación con ${PH} (concretar los antecedentes del encargo).`,
-  });
-
-  s.push({
-    key: 'objeto',
-    heading: 'Objeto del encargo',
-    body: `El objeto de la presente propuesta (la **"Propuesta"**) es la prestación por ${firmName} (la **"Firma"**) `
-      + `a favor de ${clientName} (el **"Cliente"**) de los servicios jurídicos de ${c.serviceLabel} que se describen a continuación.`,
-  });
-
-  s.push({
-    key: 'alcance',
-    heading: 'Alcance de los servicios',
-    body: 'El alcance de los servicios comprende, con carácter enunciativo:\n'
-      + bullets([...c.included, ...c.tasks], `${PH} (concretar el alcance de los servicios)`),
-  });
-
-  s.push({
-    key: 'exclusiones',
-    heading: 'Servicios excluidos',
-    body: 'Quedan expresamente excluidos de la presente Propuesta, salvo pacto adicional por escrito:\n'
-      + bullets(
-        c.excluded.length ? c.excluded : [
-          'Cualquier servicio no descrito expresamente en el apartado de alcance.',
-          'Segunda instancia, recursos extraordinarios y ejecución, salvo pacto expreso.',
-          'Tributos, tasas y aranceles oficiales, así como honorarios de terceros (procurador, notario, peritos).',
-        ],
-        `${PH} (concretar exclusiones)`,
-      ),
-  });
-
-  s.push({
-    key: 'equipo',
-    heading: 'Equipo de trabajo',
-    body: `El encargo será atendido por el equipo de ${firmName}, bajo la dirección de ${c.firm.representative || DM.firmRep}, `
-      + 'con la participación de los perfiles profesionales adecuados a cada actuación (socio, asociado y personal de apoyo).',
-  });
-
-  s.push({ key: 'honorarios', heading: 'Honorarios profesionales', body: feeParagraph(c) });
-
-  s.push({
-    key: 'gastos',
-    heading: 'Gastos, suplidos e impuestos',
-    body: 'Los honorarios no comprenden los gastos y suplidos necesarios para la prestación del servicio (entre '
-      + 'otros, tasas judiciales, aranceles notariales y registrales, honorarios de procurador y peritos, y '
-      + 'desplazamientos), que se facturarán por separado previa justificación.\n\n'
-      + 'Todas las cantidades se entienden sin IVA, que se añadirá al tipo legalmente aplicable en cada factura.',
-  });
-
-  s.push({
-    key: 'facturacion',
-    heading: 'Facturación y forma de pago',
-    body: c.billingTerms
-      ? c.billingTerms
-      : `La facturación se realizará conforme al calendario que se acuerde entre las partes (por hitos o períodos). `
-        + `El pago se efectuará mediante transferencia a la cuenta ${PH} en el plazo de ${PH} días desde la fecha de factura.`,
-  });
-
-  s.push({
-    key: 'validez',
-    heading: 'Validez de la propuesta',
-    body: `La presente propuesta tiene una validez de ${c.validityDays != null ? c.validityDays : DM.validity} días naturales desde su fecha de emisión. `
-      + 'Transcurrido dicho plazo sin aceptación, quedará sin efecto y podrá ser objeto de revisión.',
-  });
-
-  s.push({
-    key: 'confidencialidad_datos',
-    heading: 'Confidencialidad y protección de datos',
-    body: 'Las partes se obligan a mantener la confidencialidad de cuanta información intercambien con ocasión del '
-      + 'presente encargo.\n\nEl tratamiento de datos personales se realizará conforme al Reglamento (UE) 2016/679 '
-      + '(RGPD) y a la Ley Orgánica 3/2018 (LOPDGDD), con la única finalidad de la prestación de los servicios descritos.',
+    key: 'condiciones', heading: 'Condiciones particulares',
+    body: `La presente Propuesta tiene una validez de ${c.validityDays != null ? c.validityDays : DM.validity} días `
+      + 'naturales desde su fecha. Los términos de la prestación no contemplados expresamente en esta Propuesta se '
+      + 'regirán por las Condiciones Generales de Contratación adjuntas, cuya lectura recomendamos. El tratamiento de '
+      + 'datos personales se realizará conforme al RGPD y a la LO 3/2018 (LOPDGDD). La aceptación de la presente '
+      + 'Propuesta mediante intercambio de firmas en formato PDF o firma electrónica tendrá la misma fuerza legal y '
+      + 'efecto que el intercambio de firmas manuscritas.',
   });
 
   return s;
 }
 
-function acceptanceSections(c: Ctx): RawSection[] {
-  const firmName = nameOr(c.firm, 'la Firma');
+function closingSections(c: Ctx): RawSection[] {
   const clientName = c.client.name || DM.client;
   return [
     {
-      key: 'aceptacion',
-      heading: 'Aceptación de la propuesta',
-      body: 'La aceptación de la presente propuesta implica la conformidad con su contenido y con las Condiciones '
-        + 'Generales de Contratación que, en su caso, se adjuntan como anexo. Para su aceptación bastará la firma del '
-        + 'presente documento y su devolución a la Firma. La firma electrónica tendrá el mismo valor que la manuscrita.',
+      key: 'cierre', numbered: false, heading: 'Cierre',
+      body: 'Para cualquier duda o aclaración quedamos a su entera disposición.\n\nUn cordial saludo,\n\n'
+        + `${firmName(c)}\n${c.firm.representative || DM.firmRep}`,
     },
     {
-      key: 'firma',
-      heading: 'Firma',
-      body: 'En prueba de conformidad, firman las partes en el lugar y fecha indicados.\n\n'
-        + `Por la Firma: ${firmName} — ${c.firm.representative || DM.firmRep}\n`
-        + `Por el Cliente: ${clientName} — ${c.client.representative || DM.clientRep}`,
+      key: 'aceptacion', numbered: false, heading: 'Aceptación de la propuesta',
+      body: `Fecha y firma del Cliente (${clientName}) en aceptación de la Propuesta y de las Condiciones Generales `
+        + 'de Contratación adjuntas:\n\n_________________________________________',
     },
   ];
 }
 
-/** Secciones adicionales exclusivas del formato elaborado (dossier). */
-function elaborateExtras(c: Ctx): { front: RawSection[]; mid: RawSection[]; back: RawSection[] } {
-  const firmName = nameOr(c.firm, 'la Firma');
-  const front: RawSection[] = [
-    {
-      key: 'portada', numbered: false, heading: 'Portada',
-      body: `PROPUESTA DE HONORARIOS PROFESIONALES\n${c.serviceLabel}\n\n${firmName}\n${dateEs(c.dateIso)}`,
+/** Secciones adicionales del formato elaborado (dossier), en la voz de la casa. */
+function elaborateSections(c: Ctx): Record<string, RawSection> {
+  return {
+    presentacion: {
+      key: 'presentacion', heading: 'Presentación del Despacho',
+      body: `${firmName(c)} es un despacho de abogados especializado en ${c.serviceLabel}, que ofrece a sus clientes un `
+        + 'asesoramiento riguroso, práctico y orientado a resultados. [Completar con la presentación y los valores '
+        + 'diferenciales de la Firma.]',
     },
-    {
-      key: 'indice', numbered: false, heading: 'Índice',
-      body: 'El presente documento se estructura en los apartados que se relacionan a continuación (índice '
-        + 'generado automáticamente en la versión final).',
-    },
-    {
-      key: 'carta_presentacion', numbered: false, heading: 'Carta de presentación',
-      body: `Estimado/a ${c.client.representative || DM.clientRep}:\n\nNos complace remitirle la presente propuesta para la `
-        + `prestación de servicios de ${c.serviceLabel}. Quedamos a su disposición para aclarar cualquier extremo.`,
-    },
-    {
-      key: 'presentacion_firma', heading: 'Presentación de la Firma',
-      body: `${firmName} es un despacho de abogados especializado en ${c.serviceLabel}. `
-        + `Nuestros valores diferenciales y credenciales se detallan más adelante (${PH} a completar con datos de la Firma).`,
-    },
-    {
-      key: 'comprension_encargo', heading: 'Comprensión del encargo',
-      body: c.description
-        ? `Según entendemos el encargo: ${c.description}`
-        : `Nuestra comprensión del encargo es la siguiente: ${PH} (a concretar con el Cliente).`,
-    },
-  ];
-  const mid: RawSection[] = [
-    {
+    metodologia: {
       key: 'metodologia', heading: 'Metodología de trabajo',
       body: 'Nuestra metodología combina un análisis jurídico riguroso con una gestión de proyecto orientada a '
-        + 'resultados: (i) análisis y estrategia; (ii) ejecución; (iii) seguimiento e interlocución continua con el Cliente.',
+        + 'resultados: (i) análisis del asunto y definición de la estrategia; (ii) ejecución de las actuaciones; y '
+        + '(iii) seguimiento e interlocución continua con el Cliente.',
     },
-    {
-      key: 'fases', heading: 'Fases del proyecto',
-      body: 'El encargo se desarrollará en las siguientes fases:\n'
-        + bullets(c.included.length ? c.included : c.tasks, `${PH} (concretar las fases del proyecto)`),
+    credenciales: {
+      key: 'credenciales', heading: 'Credenciales y experiencia relevante',
+      body: `${firmName(c)} cuenta con experiencia relevante en asuntos de ${c.serviceLabel}. [Aportar credenciales, `
+        + 'precedentes o reconocimientos, si el Cliente los solicita.]',
     },
-    {
-      key: 'cronograma', heading: 'Cronograma',
-      body: `Se propone el siguiente calendario orientativo, a ajustar con el Cliente: ${PH} (indicar hitos y plazos).`,
-    },
-    {
+    premisas: {
       key: 'premisas', heading: 'Premisas y asunciones',
-      body: 'La presente propuesta se ha elaborado bajo las siguientes premisas. Si cambiaran, los honorarios y '
+      body: 'La presente propuesta se ha elaborado bajo las siguientes premisas; de modificarse, los honorarios y '
         + 'plazos podrían revisarse:\n'
         + bullets([
-          `Alcance limitado a lo descrito en el apartado correspondiente.`,
-          `Dedicación estimada de ${c.hoursRec ?? PH} horas.`,
-          `Disponibilidad de la información y documentación necesarias por parte del Cliente.`,
-        ], `${PH}`),
+          'El alcance se limita a las actuaciones descritas en el apartado de objeto.',
+          `La dedicación estimada es de ${c.hoursRec != null ? c.hoursRec : PH} horas.`,
+          'El Cliente facilitará en tiempo la información y documentación necesarias.',
+        ], ''),
     },
-    {
-      key: 'credenciales', heading: 'Credenciales y experiencia relevante',
-      body: `Experiencia de la Firma en asuntos similares de ${c.serviceLabel}: ${PH} (aportar credenciales, `
-        + 'precedentes o reconocimientos, si el Cliente los solicita).',
+    cronograma: {
+      key: 'cronograma', heading: 'Cronograma',
+      body: 'Se propone el siguiente calendario orientativo, a ajustar con el Cliente: [indicar hitos y plazos].',
     },
-  ];
-  const back: RawSection[] = [
-    {
-      key: 'condiciones_juridicas', heading: 'Condiciones jurídicas',
-      body: 'Las presentes condiciones se completan con las Condiciones Generales de Contratación de la Firma, que '
-        + 'se adjuntan como anexo y que incluyen, entre otras, cláusulas de limitación de responsabilidad, '
-        + 'confidencialidad, protección de datos y prevención del blanqueo de capitales.',
-    },
-    {
-      key: 'anexos', numbered: false, heading: 'Anexos',
-      body: `- Anexo I. Condiciones Generales de Contratación.\n- Anexo II. ${PH} (anexo económico o credenciales, si procede).`,
-    },
-  ];
-  return { front, mid, back };
+    anexo: { key: 'anexo_economico', heading: 'Anexo económico', body: buildAnexo(c) },
+  };
 }
 
 function assembleSimple(c: Ctx): RawSection[] {
-  return [...commonSections(c), ...acceptanceSections(c)];
+  return [...letterSections(c), ...closingSections(c)];
 }
 
 function assembleElaborate(c: Ctx): RawSection[] {
-  const { front, mid, back } = elaborateExtras(c);
-  const common = commonSections(c);
-  const byKey = (k: string) => common.find((s) => s.key === k)!;
-  // Orden dossier: portada/índice/carta/presentación/comprensión → antecedentes/objeto/alcance/exclusiones
-  // → metodología/fases/cronograma → equipo/credenciales/premisas → honorarios/gastos/facturación
-  // → condiciones jurídicas/validez → aceptación/firma → anexos.
+  const L = letterSections(c);
+  const E = elaborateSections(c);
+  const byKey = (k: string) => L.find((s) => s.key === k)!;
+  // Orden dossier: destinatario/apertura → presentación → objeto → metodología → equipo → credenciales →
+  // premisas → cronograma → honorarios → devengo → anexo económico → gastos → condiciones → cierre/aceptación.
   return [
-    ...front,
-    byKey('antecedentes'), byKey('objeto'), byKey('alcance'), byKey('exclusiones'),
-    mid[0], mid[1], mid[2], // metodología, fases, cronograma
-    byKey('equipo'), mid[4], mid[3], // credenciales, premisas
-    byKey('honorarios'), byKey('gastos'), byKey('facturacion'),
-    back[0], byKey('validez'), // condiciones jurídicas, validez
-    ...acceptanceSections(c),
-    back[1], // anexos
+    byKey('destinatario'), byKey('apertura'),
+    E.presentacion,
+    byKey('objeto'),
+    E.metodologia,
+    byKey('equipo'),
+    E.credenciales,
+    E.premisas,
+    E.cronograma,
+    byKey('honorarios'), byKey('devengo'),
+    E.anexo,
+    byKey('gastos'), byKey('condiciones'),
+    ...closingSections(c),
   ];
 }
 
@@ -508,9 +477,13 @@ export function generateProposal(input: ProposalInput): FeeProposal {
   const tasks = cleanArray(input.tasks);
   const included = cleanArray(input.included_elements);
   const excluded = cleanArray(input.excluded_services);
+  // Asunto del encabezado: resumen del encargo (de la descripción) o, si no la hay, el área.
+  const asunto = description
+    ? (description.length > 160 ? `${description.slice(0, 157).trimEnd()}…` : description)
+    : serviceLabel;
 
   const ctx: Ctx = {
-    kind, serviceLabel, currency,
+    kind, serviceLabel, asunto, currency,
     rate: input.rate_used ?? null,
     hoursRec: input.hours_recommended ?? null, hoursMin: input.hours_min ?? null, hoursMax: input.hours_max ?? null,
     feeRec: input.fee_recommended ?? null, feeMin: input.fee_min ?? null, feeMax: input.fee_max ?? null,
@@ -537,6 +510,7 @@ export function generateProposal(input: ProposalInput): FeeProposal {
   });
   if (!description) missing.push('Antecedentes/descripción del encargo.');
   if (!included.length && !tasks.length) missing.push('Detalle del alcance de los servicios.');
+  missing.push('Definir, en su caso, comisión de éxito, provisión de fondos e hitos de devengo (huecos "[...]" del texto).');
 
   const assumptions: string[] = [
     'Los honorarios se han calculado con la tarifa base de 250 €/hora salvo indicación de una tarifa específica (Regla 2).',
