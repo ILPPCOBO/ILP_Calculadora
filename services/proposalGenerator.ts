@@ -57,6 +57,75 @@ const FB = {
 /** Nombre de la firma (identidad de la casa). */
 const FIRM = 'ILP Abogados';
 
+/** Normaliza (minúsculas, sin acentos) para casar plantillas de servicio. */
+function normText(s: string): string {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/** ¿Aparece `needle` como palabra completa en `hay`? (evita falsos positivos por subcadena). */
+function hasWord(hay: string, needle: string): boolean {
+  const n = normText(needle);
+  if (!n) return false;
+  const re = new RegExp(`(^|[^a-z0-9])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`);
+  return re.test(hay);
+}
+
+/**
+ * Plantillas de HITOS/ACTUACIONES por tipo de servicio. Cuando el abogado
+ * describe el trabajo (p. ej. "licencia CASP para una startup") y no aporta
+ * tareas propias, la propuesta genera automáticamente el desglose típico del
+ * trámite. Es un borrador orientativo y editable (no sustituye el criterio).
+ */
+const SERVICE_MILESTONES: { match: string[]; label: string; milestones: string[] }[] = [
+  {
+    match: ['casp', 'criptoactivos', 'criptoactivo', 'cripto', 'mica'],
+    label: 'la autorización como proveedor de servicios de criptoactivos (CASP, MiCA)',
+    milestones: [
+      'Análisis de encaje regulatorio y definición del perímetro de servicios de criptoactivos (Reglamento (UE) 2023/1114, MiCA)',
+      'Elaboración del programa de actividades y del plan de negocio a tres años',
+      'Redacción de las políticas y procedimientos internos: gobernanza, gestión de riesgos, continuidad de negocio y resiliencia operativa digital (DORA) y conflictos de interés',
+      'Elaboración de la política de prevención del blanqueo de capitales y de la financiación del terrorismo (KYC/AML)',
+      'Documentación de los mecanismos de custodia y salvaguarda de los fondos y criptoactivos de clientes',
+      'Evaluación de idoneidad (fit & proper) de los administradores y de los socios con participación significativa',
+      'Preparación y presentación de la solicitud de autorización ante la CNMV',
+      'Atención a los requerimientos de subsanación y seguimiento del expediente hasta la obtención de la autorización',
+      'En su caso, notificación para el pasaporte europeo y prestación de servicios en otros Estados miembros',
+    ],
+  },
+  {
+    match: ['dora', 'resiliencia operativa'],
+    label: 'la adaptación a DORA (resiliencia operativa digital)',
+    milestones: [
+      'Análisis de aplicabilidad y diagnóstico de brechas (gap analysis) frente al Reglamento (UE) 2022/2554 (DORA)',
+      'Marco de gestión del riesgo de las TIC y políticas asociadas',
+      'Registro de acuerdos con proveedores terceros de servicios TIC y revisión contractual',
+      'Procedimiento de gestión, clasificación y notificación de incidentes graves relacionados con las TIC',
+      'Programa de pruebas de resiliencia operativa digital',
+      'Preparación de la información a remitir a la autoridad competente',
+    ],
+  },
+  {
+    match: ['marca', 'marcas', 'signo distintivo', 'nombre comercial'],
+    label: 'el registro de marca',
+    milestones: [
+      'Búsqueda de anterioridades y análisis de disponibilidad y riesgo del signo',
+      'Definición de la estrategia de protección (clases de Niza y ámbito territorial)',
+      'Preparación y presentación de la solicitud de registro ante la OEPM/EUIPO',
+      'Seguimiento del expediente y respuesta a suspensiones u oposiciones',
+      'Obtención del título de registro y calendario de renovaciones',
+    ],
+  },
+];
+
+/** Deriva los hitos típicos del servicio descrito (o [] si no hay plantilla que case). */
+function deriveMilestones(description: string | null, serviceLabel: string): { label: string; milestones: string[] } | null {
+  const hay = ` ${normText(`${description || ''} ${serviceLabel || ''}`)} `;
+  for (const t of SERVICE_MILESTONES) {
+    if (t.match.some((m) => hasWord(hay, m))) return { label: t.label, milestones: t.milestones };
+  }
+  return null;
+}
+
 export interface ProposalPartyInput {
   name?: string | null;
   legal_form?: string | null;
@@ -257,7 +326,11 @@ function feeSentence(c: Ctx): string {
   s += `. Podrá pactarse, además, un variable de éxito de ${FB.exito}, que se devengará ${FB.exitoHecho}.`;
   return s + '\n\n'
     + 'Los honorarios comprenden la totalidad de las actuaciones descritas en el apartado de objeto; cualquier '
-    + 'actuación no prevista expresamente será objeto de presupuesto separado.';
+    + 'actuación no prevista expresamente será objeto de presupuesto separado.\n\n'
+    + `Si durante la ejecución del encargo ${firmName(c)} apreciara desviaciones superiores al 15% entre el alcance o `
+    + 'la dedicación estimados y la realidad, o circunstancias sobrevenidas que alteren el encargo, lo pondrá de '
+    + 'inmediato en conocimiento del Cliente y remitirá una propuesta complementaria. En la facturación por tiempo, la '
+    + 'fracción mínima computable será de 15 minutos.';
 }
 
 /** Cuerpo de "Objeto y descripción del servicio". */
@@ -286,10 +359,17 @@ function buildDevengo(c: Ctx): string {
     : 'Los honorarios fijos se devengarán conforme a los siguientes hitos, sin perjuicio de su ajuste de común '
       + `acuerdo con el Cliente: ${FB.hitos}.`;
   return hitos + '\n\n'
-    + `A la aceptación de esta Propuesta, el Cliente abonará una provisión de fondos de ${FB.provision}, imputable `
-    + 'a los honorarios conforme se vayan devengando.\n\n'
-    + 'Le agradeceríamos que, al efectuar el pago, su nombre (o el de su empresa) y el número de la presente '
-    + 'Propuesta queden claramente recogidos en el concepto, a fin de garantizar un correcto seguimiento.';
+    + 'A la aceptación de esta Propuesta, y con carácter previo al inicio de los servicios, el Cliente abonará una '
+    + `provisión de fondos de ${FB.provision} (con carácter general, no inferior al 30% de los honorarios `
+    + 'presupuestados), que se imputará a los honorarios conforme se vayan devengando. La aceptación de la Propuesta '
+    + 'podrá ser expresa o tácita, entendiéndose aceptada si el Cliente recaba o recibe los servicios sin oposición.\n\n'
+    + 'Las minutas se remitirán preferentemente por correo electrónico y serán pagaderas mediante transferencia en el '
+    + 'plazo de quince (15) días desde su recepción. Transcurrido dicho plazo sin oposición motivada, la minuta se '
+    + 'entenderá aceptada, sin perjuicio del derecho del Cliente a solicitar su revisión de conformidad con la '
+    + 'normativa del Colegio de Abogados correspondiente. El impago devengará los intereses de demora legalmente '
+    + 'aplicables y facultará al Despacho para suspender o interrumpir la prestación de los servicios.\n\n'
+    + 'Le agradeceríamos que, al efectuar el pago, su nombre (o el de su empresa) y el número de la presente Propuesta '
+    + 'queden claramente recogidos en el concepto, a fin de garantizar un correcto seguimiento.';
 }
 
 /** Anexo económico (formato elaborado): resume las cifras de la calculadora. */
@@ -302,62 +382,159 @@ function buildAnexo(c: Ctx): string {
     + `- Provisión de fondos a la firma: ${FB.provision}.`;
 }
 
-/** Secciones comunes al estilo carta de las propuestas reales (ILP / {m}). */
-function letterSections(c: Ctx): RawSection[] {
+type Tier = ProposalKind;
+const ALL: Tier[] = ['reduced', 'intermediate', 'extended'];
+const IE: Tier[] = ['intermediate', 'extended'];
+const EXT: Tier[] = ['extended'];
+const RED: Tier[] = ['reduced'];
+
+interface Clause { key: string; heading: string; tiers: Tier[]; body: string; }
+
+/** Encabezado de la carta (destinatario + apertura), sin numerar. */
+function structuralOpen(c: Ctx): RawSection[] {
   const clientName = c.client.name || DM.client;
   const clientRep = c.client.representative || DM.clientRep;
-  const s: RawSection[] = [];
+  return [
+    {
+      key: 'destinatario', numbered: false, heading: 'Destinatario',
+      body: [
+        `N/ref.: ${DM.reference}`,
+        `A la atención de: ${clientName}`,
+        `${DM.cif}   ·   Domicilio: [domicilio del Cliente]`,
+        `Asunto: ${c.asunto.charAt(0).toUpperCase()}${c.asunto.slice(1)}`,
+      ].join('\n'),
+    },
+    {
+      key: 'apertura', numbered: false, heading: 'Apertura',
+      body: `Estimado/a ${clientRep}:\n\n`
+        + `Atendiendo a su solicitud, ${firmName(c)} (en adelante, «ILP» o el **«Despacho»**) se complace en remitirle `
+        + 'la presente propuesta de honorarios profesionales, que tiene la naturaleza de hoja de encargo profesional '
+        + `(en adelante, la **«Propuesta»**), elaborada exclusivamente para ${clientName} (en adelante, el `
+        + '**«Cliente»**) y de carácter confidencial.',
+    },
+  ];
+}
 
-  // Destinatario (N/ref., A la atención de, Asunto).
-  s.push({
-    key: 'destinatario', numbered: false, heading: 'Destinatario',
-    body: [`N/ref.: ${DM.reference}`, `A la atención de: ${clientName}`,
-      `Asunto: ${c.asunto.charAt(0).toUpperCase()}${c.asunto.slice(1)}`].join('\n'),
-  });
+/** Cuerpo de "Gastos, suplidos e impuestos". */
+function gastosBody(): string {
+  return 'Salvo indicación en contrario, los honorarios se entienden sin incluir el IVA aplicable en cada momento, que '
+    + 'se añadirá a todas las cantidades.\n\n'
+    + 'Los honorarios no comprenden los honorarios de terceros (procuradores, notarios, registradores, peritos, '
+    + 'traductores, entre otros), ni los impuestos, tributos, tasas y aranceles vinculados a la operación, pleito o '
+    + 'mandato, ni los gastos de desplazamiento, que se repercutirán al Cliente de forma independiente y previa '
+    + 'justificación. Se repercutirán, asimismo, los gastos generales del Despacho (fotocopias, comunicaciones y '
+    + 'gastos asimilables) a razón de un porcentaje del 2% de los honorarios profesionales, sin necesidad de '
+    + 'justificación documental.';
+}
 
-  // Apertura con términos definidos en negrita.
-  s.push({
-    key: 'apertura', numbered: false, heading: 'Apertura',
-    body: `Estimado/a ${clientRep}:\n\n`
-      + `Atendiendo a su solicitud, ${firmName(c)} (en adelante, «ILP» o el **«Despacho»**) se complace en remitirle la `
-      + `presente propuesta de honorarios profesionales (en adelante, la **«Propuesta»**), elaborada exclusivamente `
-      + `para ${clientName} (en adelante, el **«Cliente»**) y de carácter confidencial.`,
-  });
-
-  s.push({ key: 'objeto', heading: 'Objeto y descripción del servicio', body: buildObjeto(c) });
-
-  s.push({
-    key: 'equipo', heading: 'Equipo de trabajo',
-    body: `Los servicios descritos serán dirigidos por ${c.firm.representative || DM.firmRep}, ${FB.socio}, y serán `
-      + `prestados por un equipo multidisciplinar adaptado a las necesidades del asunto, con las incorporaciones que en `
-      + 'cada momento se requieran.',
-  });
-
-  s.push({ key: 'honorarios', heading: 'Honorarios profesionales', body: feeSentence(c) });
-
-  s.push({ key: 'devengo', heading: 'Devengo de los honorarios y provisión de fondos', body: buildDevengo(c) });
-
-  s.push({
-    key: 'gastos', heading: 'Gastos, suplidos e impuestos',
-    body: 'Los honorarios anteriores no comprenden los gastos y suplidos que la actuación genere (entre otros, '
-      + 'aranceles registrales y notariales, tasas, honorarios de peritos o auditores y gastos de desplazamiento), que '
-      + 'se repercutirán de forma independiente y previa justificación. A todas las cantidades se añadirán los '
-      + 'impuestos que legalmente resulten aplicables. Quedan excluidas de esta Propuesta las actuaciones ajenas al '
-      + 'objeto descrito, así como la eventual ejecución de resoluciones o la interposición de recursos '
-      + 'extraordinarios, que serán objeto de presupuesto separado.',
-  });
-
-  s.push({
-    key: 'condiciones', heading: 'Condiciones particulares',
-    body: `La presente Propuesta tiene una validez de ${c.validityDays != null ? c.validityDays : DM.validity} días `
-      + 'naturales desde su fecha. Los términos de la prestación no contemplados expresamente en esta Propuesta se '
-      + 'regirán por las Condiciones Generales de Contratación adjuntas, cuya lectura recomendamos. El tratamiento de '
-      + 'datos personales se realizará conforme al RGPD y a la LO 3/2018 (LOPDGDD). La aceptación de la presente '
-      + 'Propuesta mediante intercambio de firmas en formato PDF o firma electrónica tendrá la misma fuerza legal y '
-      + 'efecto que el intercambio de firmas manuscritas.',
-  });
-
-  return s;
+/**
+ * Cláusulas jurídicas necesarias en una propuesta/hoja de encargo española.
+ * La LIMITACIÓN DE RESPONSABILIDAD es obligatoria en TODOS los formatos y limita
+ * la responsabilidad de la Firma al total de honorarios efectivamente percibidos.
+ */
+function clauseSections(c: Ctx): Record<string, RawSection> {
+  const validez = c.validityDays != null ? c.validityDays : DM.validity;
+  const F = firmName(c);
+  return {
+    sobre_despacho: {
+      key: 'sobre_despacho', heading: 'Sobre el Despacho',
+      body: `${F} presta servicios profesionales de abogacía con sujeción al Estatuto General de la Abogacía Española `
+        + '(Real Decreto 135/2021), al Código Deontológico y a las normas del Ilustre Colegio de Abogados de '
+        + '[Colegio de Abogados] al que pertenecen sus letrados, quienes están sujetos al secreto profesional y al '
+        + 'deber de confidencialidad. Datos identificativos del Despacho: NIF [NIF del Despacho] · domicilio '
+        + 'profesional [domicilio del Despacho] · nº de colegiación [nº de colegiación].',
+    },
+    limitacion: {
+      key: 'limitacion', heading: 'Limitación de responsabilidad',
+      body: `La responsabilidad total de ${F} frente al Cliente por cualquier reclamación derivada de la prestación `
+        + 'de los servicios objeto de la presente Propuesta quedará limitada, en su conjunto, al importe total de los '
+        + `honorarios efectivamente percibidos por ${F} en relación con el presente encargo. Quedan excluidos, en todo `
+        + 'caso, el lucro cesante, los daños indirectos o consecuenciales, la pérdida de beneficios y el coste de '
+        + 'oportunidad. La presente limitación no será de aplicación respecto de la responsabilidad que no resulte '
+        + `legalmente limitable, en particular la derivada de dolo o negligencia grave. ${F} mantiene en vigor un `
+        + 'seguro de responsabilidad civil profesional, cuyo certificado podrá facilitar a solicitud del Cliente.',
+    },
+    costas: {
+      key: 'costas', heading: 'Costas procesales',
+      body: 'El Cliente queda informado de las consecuencias que una eventual condena en costas puede comportar y de '
+        + 'su importe aproximado ([estimación de costas], a concretar según la cuantía y la instancia). En caso de '
+        + `condena en costas a favor del Cliente y de que su tasación resultara superior a los honorarios de la `
+        + `Propuesta, ${F} se reserva el derecho a facturar la diferencia, quedando autorizado a cobrarla con cargo a `
+        + 'los fondos que se obtengan de la parte condenada en costas.',
+    },
+    confidencialidad: {
+      key: 'confidencialidad', heading: 'Confidencialidad y protección de datos',
+      body: `${F} prestará sus servicios con sujeción al secreto profesional y al deber de confidencialidad propios de `
+        + 'la abogacía, y no revelará información del Cliente, de su grupo ni del objeto del encargo, sin perjuicio de '
+        + 'poder dar publicidad genérica a su intervención sin revelar la identidad de las partes.\n\n'
+        + `En materia de protección de datos, ${F} es responsable del tratamiento de los datos personales del Cliente `
+        + 'con la finalidad de gestionar la relación contractual y prestar los servicios (base jurídica: la ejecución '
+        + 'del contrato). Los datos no se cederán a terceros salvo obligación legal. El Cliente podrá ejercer sus '
+        + 'derechos de acceso, rectificación, supresión, oposición, limitación y portabilidad conforme al Reglamento '
+        + '(UE) 2016/679 (RGPD) y a la Ley Orgánica 3/2018 (LOPDGDD), dirigiéndose a [correo de protección de datos].',
+    },
+    blanqueo: {
+      key: 'blanqueo', heading: 'Prevención del blanqueo de capitales',
+      body: 'De conformidad con la Ley 10/2010, de 28 de abril, de prevención del blanqueo de capitales y de la '
+        + `financiación del terrorismo, ${F} aplicará las medidas de diligencia debida que resulten preceptivas, `
+        + 'incluida la identificación del Cliente y de su titular real. El Cliente se compromete a facilitar con '
+        + 'veracidad la documentación e información necesarias y declara la licitud del origen de los fondos empleados '
+        + 'en el pago de los honorarios.',
+    },
+    propiedad_intelectual: {
+      key: 'propiedad_intelectual', heading: 'Propiedad intelectual',
+      body: `Los informes, documentos y demás materiales elaborados por ${F} en el marco del encargo se entregan al `
+        + 'Cliente para el uso propio del asunto para el que se emiten. Los derechos de propiedad intelectual sobre '
+        + `las metodologías, plantillas y conocimientos preexistentes de ${F} permanecen en su exclusiva titularidad.`,
+    },
+    custodia: {
+      key: 'custodia', heading: 'Custodia y devolución de la documentación',
+      body: `${F} custodiará con la debida diligencia la documentación original y las copias entregadas por el `
+        + 'Cliente, que devolverá a su requerimiento y, en todo caso, a la finalización del encargo. Transcurrido el '
+        + `plazo de cinco (5) años desde la finalización del encargo, ${F} podrá destruir la documentación que obre en `
+        + 'su poder, salvo aquella que deba conservar por imperativo legal.',
+    },
+    terminacion: {
+      key: 'terminacion', heading: 'Duración, desistimiento y terminación',
+      body: 'El encargo permanecerá vigente hasta la conclusión de las actuaciones descritas. Dada su naturaleza '
+        + 'intuitu personae, el Cliente podrá desistir del encargo en cualquier momento y sin necesidad de causa, '
+        + 'mediante comunicación escrita, abonando los honorarios correspondientes a los trabajos efectivamente '
+        + `realizados y los gastos y suplidos incurridos hasta esa fecha. ${F} podrá igualmente renunciar al encargo `
+        + 'con un preaviso mínimo de quince (15) días, durante el cual llevará a cabo las actuaciones necesarias para '
+        + 'preservar los derechos e intereses del Cliente.',
+    },
+    deontologia: {
+      key: 'deontologia', heading: 'Normas deontológicas y revisión de honorarios',
+      body: 'La prestación de los servicios se sujeta al Estatuto General de la Abogacía Española y al Código '
+        + 'Deontológico. En caso de controversia sobre los honorarios, éstos se someterán a las normas deontológicas '
+        + 'y, en su caso, a los criterios orientativos del Colegio de Abogados correspondiente, pudiendo el Cliente '
+        + 'solicitar la revisión o impugnación de la minuta ante dicho Colegio conforme a la normativa aplicable.',
+    },
+    jurisdiccion: {
+      key: 'jurisdiccion', heading: 'Ley aplicable y jurisdicción',
+      body: 'La presente Propuesta y la relación contractual se rigen por el Derecho común español. Con renuncia a '
+        + 'cualquier otro fuero que pudiera corresponderles, las partes se someten a los Juzgados y Tribunales de '
+        + '[sede del Despacho] para la resolución de cualquier controversia derivada de su interpretación o '
+        + 'cumplimiento.',
+    },
+    validez: {
+      key: 'condiciones', heading: 'Validez y aceptación',
+      body: `La presente Propuesta tiene una validez de ${validez} días naturales desde su fecha. Los términos de la `
+        + 'prestación no contemplados expresamente en esta Propuesta se regirán por las Condiciones Generales de '
+        + 'Contratación adjuntas, cuya lectura recomendamos. La aceptación mediante intercambio de firmas en formato '
+        + 'PDF o firma electrónica tendrá la misma fuerza legal y efecto que el intercambio de firmas manuscritas.',
+    },
+    // Formato reducido: una sola cláusula que condensa validez + datos + desistimiento + firma.
+    condicionesReducida: {
+      key: 'condiciones', heading: 'Condiciones',
+      body: `La presente Propuesta tiene una validez de ${validez} días naturales desde su fecha. El Cliente podrá `
+        + 'desistir del encargo en cualquier momento abonando lo efectivamente devengado. El tratamiento de datos '
+        + 'personales se realizará conforme al RGPD y a la LO 3/2018 (LOPDGDD); las partes guardarán confidencialidad. '
+        + 'Los términos no contemplados expresamente se regirán por las Condiciones Generales de Contratación '
+        + 'adjuntas. La aceptación mediante firma electrónica o intercambio de firmas en PDF tendrá la misma fuerza '
+        + 'legal que la firma manuscrita.',
+    },
+  };
 }
 
 function closingSections(c: Ctx): RawSection[] {
@@ -414,30 +591,169 @@ function elaborateSections(c: Ctx): Record<string, RawSection> {
   };
 }
 
-function assembleSimple(c: Ctx): RawSection[] {
-  return [...letterSections(c), ...closingSections(c)];
+/**
+ * REGISTRO DE CLÁUSULAS en orden de documento. Cada cláusula declara los formatos
+ * en los que aparece (`tiers`): las NECESARIAS van en todos los formatos aplicables;
+ * las OPCIONALES se escalonan — reducida pocas, intermedia más, extendida el máximo.
+ * Reutiliza los cuerpos ya redactados (clauseSections / elaborateSections) y añade
+ * las cláusulas restantes de forma concisa. Los datos específicos quedan como [...].
+ */
+function clauseRegistry(c: Ctx): Clause[] {
+  const CL = clauseSections(c);
+  const E = elaborateSections(c);
+  const F = firmName(c);
+  const cl = (key: string, heading: string, tiers: Tier[], body: string): Clause => ({ key, heading, tiers, body });
+  return [
+    // — Identificación y preliminares —
+    cl('identificacion', 'Identificación de las partes', IE,
+      `El Despacho: ${F}, [forma jurídica del Despacho], NIF [NIF del Despacho], domicilio profesional en `
+      + `[domicilio del Despacho]. Letrado responsable: ${c.firm.representative || DM.firmRep}, del Ilustre Colegio `
+      + 'de Abogados de [Colegio de Abogados], nº de colegiación [nº de colegiación].\n\n'
+      + `El Cliente: ${c.client.name || DM.client}, ${DM.cif}, con domicilio en [domicilio del Cliente] `
+      + '([forma jurídica y datos registrales, si procede]), representado por '
+      + `${c.client.representative || DM.clientRep}, con poder bastante para obligarle en el presente encargo.`),
+    cl('definiciones', 'Definiciones', EXT,
+      'A los efectos de este documento: la **«Propuesta»** es la presente y sus anexos; el **«Cliente»** es su '
+      + 'destinatario; el **«Despacho»** es la firma que presta los servicios; el **«Encargo»** es el objeto descrito; '
+      + 'y las **«CGC»** son las Condiciones Generales de Contratación adjuntas.'),
+    cl('interpretacion', 'Interpretación', EXT,
+      'Los títulos de los apartados son indicativos y no afectan a su interpretación. Las referencias a normas se '
+      + 'entienden hechas a su redacción vigente en cada momento.'),
+    cl('prelacion', 'Orden de prelación', EXT,
+      'En caso de contradicción prevalecerá, por este orden: (i) la Propuesta; (ii) las CGC; y (iii) los demás anexos.'),
+    cl('sobre_despacho', CL.sobre_despacho.heading, EXT, CL.sobre_despacho.body),
+    cl('presentacion', E.presentacion.heading, EXT, E.presentacion.body),
+    // — Antecedentes y objeto —
+    cl('antecedentes', 'Antecedentes', IE,
+      c.description ? c.description
+        : 'El Cliente ha solicitado al Despacho asesoramiento en relación con el asunto de referencia. [Completar los '
+          + 'antecedentes que motivan el encargo.]'),
+    cl('objeto', 'Objeto y descripción del servicio', ALL, buildObjeto(c)),
+    cl('metodologia', E.metodologia.heading, EXT, E.metodologia.body),
+    cl('servicios_excluidos', 'Servicios excluidos', IE,
+      'Salvo pacto expreso, quedan excluidos del Encargo, entre otros: la segunda instancia y los recursos '
+      + 'extraordinarios; la ejecución de resoluciones; el asesoramiento fiscal, contable o de Derecho extranjero; y '
+      + 'las actuaciones notariales, registrales y de traducción, que serán objeto de presupuesto separado.'
+      + (c.excluded.length ? `\n\nExclusiones específicas de este encargo: ${c.excluded.join('; ')}.` : '')),
+    cl('entregables', 'Entregables', IE,
+      'Los entregables consistirán, según proceda, en informes o dictámenes, contratos y escritos, presentaciones '
+      + 'ante organismos y el soporte de negociación asociado, conforme al apartado de objeto.'),
+    cl('no_garantia', 'Obligación de medios', ALL,
+      'El Despacho asume una obligación de medios y no de resultado: prestará sus servicios con la diligencia y '
+      + 'competencia profesional exigibles, sin garantizar un resultado concreto, que depende de factores ajenos a su '
+      + 'control (criterio de terceros y de los órganos administrativos o judiciales).'),
+    cl('riesgo', 'Advertencia de viabilidad jurídica', IE,
+      'El asesoramiento se emite en función de los hechos y la documentación facilitados por el Cliente y de la '
+      + 'legislación y jurisprudencia vigentes en la fecha del Encargo; su variación podría alterar las conclusiones.'),
+    // — Equipo, conflictos, colaboración, planificación —
+    cl('equipo', 'Equipo de trabajo', IE,
+      `Los servicios serán dirigidos por ${c.firm.representative || DM.firmRep}, ${FB.socio}, y prestados por un equipo `
+      + 'adaptado a las necesidades del asunto, con las incorporaciones que en cada momento se requieran.'),
+    cl('credenciales', E.credenciales.heading, EXT, E.credenciales.body),
+    cl('conflicto', 'Conflictos de interés', IE,
+      'El Despacho ha realizado la comprobación de conflictos de interés conforme a la información disponible; el '
+      + 'Cliente se compromete a identificar a las partes contrarias e interesadas. De surgir un conflicto sobrevenido '
+      + 'que impida la actuación, el Despacho podrá renunciar al Encargo preservando la confidencialidad.'),
+    cl('cooperacion', 'Deberes de colaboración del Cliente', IE,
+      'El Cliente se obliga a facilitar de forma veraz, completa y en plazo la información y documentación necesarias y '
+      + 'a comunicar cualquier hecho relevante. El Despacho no responderá de las consecuencias derivadas de información '
+      + 'inexacta, incompleta o extemporánea.'),
+    cl('premisas', E.premisas.heading, IE, E.premisas.body),
+    cl('cronograma', E.cronograma.heading, EXT, E.cronograma.body),
+    cl('plazos', 'Plazos y dependencias', IE,
+      'Los plazos de entrega son estimativos y quedan condicionados a la colaboración del Cliente y a la actuación de '
+      + 'terceros (organismos, contrapartes, órganos judiciales), cuyos tiempos no son imputables al Despacho.'),
+    // — Honorarios y economía —
+    cl('honorarios', 'Honorarios profesionales', ALL, feeSentence(c)),
+    cl('change_control', 'Control de cambios de alcance', IE,
+      'Cualquier ampliación o modificación del alcance se documentará por escrito mediante propuesta complementaria, '
+      + 'con su ajuste de honorarios y plazos, antes de su ejecución.'),
+    cl('cap_fee', 'Presupuesto máximo', EXT,
+      'En la facturación por tiempo podrá pactarse un presupuesto máximo (cap) de [importe del cap máximo]; alcanzado '
+      + 'dicho límite, el Despacho lo comunicará al Cliente antes de continuar.'),
+    cl('tarifas', 'Tarifas por categoría profesional', EXT,
+      'Para los trabajos facturables por tiempo se aplicarán las siguientes tarifas/hora (IVA no incluido): socio '
+      + '[● €/h] · asociado senior [● €/h] · asociado [● €/h] · junior [● €/h].'),
+    cl('recargo_urgencia', 'Recargo por urgencia', EXT,
+      'Los trabajos que, a solicitud del Cliente, deban realizarse con urgencia o fuera del horario laboral ordinario '
+      + 'podrán devengar un recargo de [porcentaje de recargo] sobre los honorarios correspondientes.'),
+    cl('revisiones', 'Rondas de revisión incluidas', EXT,
+      'Los honorarios comprenden hasta [número] rondas de revisión de los documentos o entregables; las adicionales se '
+      + 'facturarán por tiempo conforme a las tarifas aplicables.'),
+    cl('devengo', 'Devengo, facturación y provisión de fondos', IE, buildDevengo(c)),
+    cl('aceptacion_entregable', 'Aceptación de entregables', EXT,
+      'Se entenderán aceptados los entregables si el Cliente no formula observaciones por escrito en el plazo de '
+      + '[número] días naturales desde su remisión.'),
+    cl('anexo_economico', E.anexo.heading, EXT, E.anexo.body),
+    cl('gastos', 'Gastos, suplidos e impuestos', ALL, gastosBody()),
+    cl('costas', CL.costas.heading, IE, CL.costas.body),
+    // — Responsabilidad —
+    cl('limitacion', CL.limitacion.heading, ALL, CL.limitacion.body),
+    cl('no_third_party', 'No dependencia de terceros', IE,
+      'El asesoramiento se emite en exclusivo beneficio del Cliente y para el asunto descrito; no podrá ser invocado '
+      + 'ni utilizado por terceros, ni para una finalidad distinta, sin el consentimiento escrito del Despacho.'),
+    // — Confidencialidad, datos, IP, AML, tecnología —
+    cl('confidencialidad', CL.confidencialidad.heading, IE, CL.confidencialidad.body),
+    cl('blanqueo', CL.blanqueo.heading, IE, CL.blanqueo.body),
+    cl('uso_ia', 'Uso de herramientas tecnológicas', IE,
+      `Para la prestación eficiente de los servicios, ${F} podrá emplear herramientas tecnológicas y de inteligencia `
+      + 'artificial de apoyo, bajo supervisión profesional y con las debidas garantías de confidencialidad y '
+      + 'seguridad, sin que ello altere la responsabilidad profesional del letrado.'),
+    cl('ciberseguridad', 'Ciberseguridad y prevención del fraude', IE,
+      'El Despacho no comunicará cambios de sus datos bancarios por correo electrónico. Ante cualquier mensaje que '
+      + 'anuncie un cambio de cuenta, el Cliente deberá verificarlo por teléfono con su interlocutor habitual antes de '
+      + 'pagar. El Despacho no responderá de los pagos realizados a cuentas no verificadas.'),
+    cl('propiedad_intelectual', CL.propiedad_intelectual.heading, IE, CL.propiedad_intelectual.body),
+    cl('custodia', CL.custodia.heading, IE, CL.custodia.body),
+    cl('colaboradores', 'Colaboradores externos y subcontratación', EXT,
+      'El Despacho podrá servirse de procuradores, abogados de otras jurisdicciones, peritos, traductores u otros '
+      + 'colaboradores externos cuando resulte necesario, informando al Cliente; sus honorarios tendrán la '
+      + 'consideración de suplidos.'),
+    // — Comunicación, terminación, misceláneas —
+    cl('comunicacion', 'Protocolo de comunicación', IE,
+      'Las comunicaciones se dirigirán preferentemente por correo electrónico a los interlocutores designados por cada '
+      + 'parte [interlocutores y datos de contacto]. El idioma de trabajo será el español, salvo pacto en contrario.'),
+    cl('terminacion', CL.terminacion.heading, ALL, CL.terminacion.body),
+    cl('quejas', 'Reclamaciones', IE,
+      'El Cliente podrá dirigir cualquier reclamación al Despacho a través de [canal de quejas del Despacho] y, en su '
+      + 'caso, al Colegio de Abogados correspondiente.'),
+    cl('publicidad', 'Publicidad y referencias', EXT,
+      'El Despacho podrá referirse a su intervención con fines promocionales de forma genérica; el uso del nombre o '
+      + 'del logotipo del Cliente requerirá su consentimiento expreso.'),
+    cl('no_captacion', 'No captación de personal', EXT,
+      'Durante la vigencia del Encargo y los doce (12) meses siguientes, las partes se abstendrán de captar al personal '
+      + 'de la otra que hubiera intervenido en el Encargo, salvo acuerdo escrito.'),
+    cl('fuerza_mayor', 'Fuerza mayor', EXT,
+      'Ninguna parte responderá del incumplimiento debido a fuerza mayor o caso fortuito, que suspenderá los plazos '
+      + 'mientras persista la causa.'),
+    cl('cesion', 'Cesión', EXT,
+      'El Encargo se celebra intuitu personae; ninguna parte podrá ceder su posición contractual sin el consentimiento '
+      + 'escrito de la otra.'),
+    cl('deontologia', CL.deontologia.heading, IE, CL.deontologia.body),
+    // — Ley, jurisdicción, boilerplate, anexos, aceptación —
+    cl('jurisdiccion', CL.jurisdiccion.heading, ALL, CL.jurisdiccion.body),
+    cl('mediacion', 'Mediación y arbitraje', EXT,
+      'Con carácter previo a la vía judicial, las partes procurarán resolver sus controversias mediante negociación o '
+      + 'mediación. [Opcional: sumisión a arbitraje ante [institución arbitral].]'),
+    cl('boilerplate', 'Nulidad parcial, no renuncia y acuerdo íntegro', IE,
+      'La nulidad de cualquier cláusula no afectará a la validez de las restantes. La falta de ejercicio de un derecho '
+      + 'no implica su renuncia. La Propuesta y las CGC constituyen el acuerdo íntegro entre las partes sobre su objeto.'),
+    cl('idioma', 'Prevalencia del idioma', EXT,
+      'En caso de versión bilingüe, prevalecerá la versión en español a efectos de interpretación.'),
+    cl('anexos', 'Anexos', IE,
+      '- Anexo I. Condiciones Generales de Contratación.\n- Anexo II. Anexo económico / tabla de honorarios.\n'
+      + '- Anexo III. Información de protección de datos.\n- Anexo IV. [documentación KYC/AML, si procede].'),
+    cl('condiciones', CL.validez.heading, IE, CL.validez.body),
+    cl('condiciones', CL.condicionesReducida.heading, RED, CL.condicionesReducida.body),
+  ];
 }
 
-function assembleElaborate(c: Ctx): RawSection[] {
-  const L = letterSections(c);
-  const E = elaborateSections(c);
-  const byKey = (k: string) => L.find((s) => s.key === k)!;
-  // Orden dossier: destinatario/apertura → presentación → objeto → metodología → equipo → credenciales →
-  // premisas → cronograma → honorarios → devengo → anexo económico → gastos → condiciones → cierre/aceptación.
-  return [
-    byKey('destinatario'), byKey('apertura'),
-    E.presentacion,
-    byKey('objeto'),
-    E.metodologia,
-    byKey('equipo'),
-    E.credenciales,
-    E.premisas,
-    E.cronograma,
-    byKey('honorarios'), byKey('devengo'),
-    E.anexo,
-    byKey('gastos'), byKey('condiciones'),
-    ...closingSections(c),
-  ];
+/** Ensambla la propuesta filtrando el registro por formato (staggering de cláusulas). */
+function assembleByKind(c: Ctx): RawSection[] {
+  const clauses: RawSection[] = clauseRegistry(c)
+    .filter((cl) => cl.tiers.includes(c.kind))
+    .map((cl) => ({ key: cl.key, heading: cl.heading, body: cl.body }));
+  return [...structuralOpen(c), ...clauses, ...closingSections(c)];
 }
 
 function numberSections(raw: RawSection[]): ProposalSection[] {
@@ -459,9 +775,17 @@ function numberSections(raw: RawSection[]): ProposalSection[] {
 // Generador principal (puro, no persiste)
 // ---------------------------------------------------------------------------
 
+/** Normaliza el formato a los tres niveles (con compatibilidad hacia atrás). */
+function normalizeKind(k: unknown): ProposalKind {
+  if (k === 'reduced' || k === 'intermediate' || k === 'extended') return k;
+  if (k === 'elaborate') return 'extended';
+  if (k === 'simple') return 'intermediate';
+  return 'intermediate';
+}
+
 export function generateProposal(input: ProposalInput): FeeProposal {
   const id = newId('prop');
-  const kind: ProposalKind = input.kind === 'elaborate' ? 'elaborate' : 'simple';
+  const kind: ProposalKind = normalizeKind(input.kind);
   const currency = (input.currency || 'EUR').trim() || 'EUR';
   const subcat = input.service_subcategory && input.service_subcategory.trim() ? input.service_subcategory.trim() : null;
   const serviceCat = (input.service_category || '').trim() || PH;
@@ -475,8 +799,15 @@ export function generateProposal(input: ProposalInput): FeeProposal {
 
   const description = (input.description || '').replace(/\s+/g, ' ').trim() || null;
   const tasks = cleanArray(input.tasks);
-  const included = cleanArray(input.included_elements);
+  let included = cleanArray(input.included_elements);
   const excluded = cleanArray(input.excluded_services);
+  // Si el abogado no aporta actuaciones propias, genera automáticamente los hitos
+  // típicos del servicio descrito (p. ej. "licencia CASP" -> trámite MiCA ante CNMV).
+  let autoMilestones: string | null = null;
+  if (included.length + tasks.length < 2) {
+    const dm = deriveMilestones(description, serviceLabel);
+    if (dm) { included = dm.milestones; autoMilestones = dm.label; }
+  }
   // Asunto del encabezado: resumen del encargo (de la descripción) o, si no la hay, el área.
   const asunto = description
     ? (description.length > 160 ? `${description.slice(0, 157).trimEnd()}…` : description)
@@ -496,7 +827,7 @@ export function generateProposal(input: ProposalInput): FeeProposal {
     billingTerms: (input.billing_terms || '').trim() || null,
   };
 
-  const rawSections = numberSections(kind === 'elaborate' ? assembleElaborate(ctx) : assembleSimple(ctx));
+  const rawSections = numberSections(assembleByKind(ctx));
   // Rellena automáticamente los marcadores con los datos ya disponibles.
   const sections = fillDetailMarkers(rawSections, {
     clientName: client.name, clientTaxId: client.tax_id, clientRep: client.representative,
@@ -516,6 +847,10 @@ export function generateProposal(input: ProposalInput): FeeProposal {
     'Los honorarios se han calculado con la tarifa base de 250 €/hora salvo indicación de una tarifa específica (Regla 2).',
     'Salvo indicación expresa, los honorarios no incluyen IVA ni gastos/suplidos (Regla 9).',
   ];
+  if (autoMilestones) {
+    assumptions.push(`Las actuaciones e hitos para ${autoMilestones} se han generado automáticamente a partir de una `
+      + 'plantilla del trámite; revíselos y ajústelos al caso concreto.');
+  }
 
   const warnings: string[] = [
     'Propuesta generada automáticamente a partir de una estimación: es un borrador interno; revísela y ajústela '

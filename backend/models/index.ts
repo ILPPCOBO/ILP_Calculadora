@@ -330,14 +330,15 @@ export interface ExportedBreakdownDocument {
 // opcionalmente, de un desglose de actuaciones. Dos formatos: sencilla (carta,
 // 2–4 pp) y elaborada (dossier, 10+ pp). Los datos ausentes se marcan con "[●]".
 
-/** Formato de la propuesta. */
-export type ProposalKind = 'simple' | 'elaborate';
-export const PROPOSAL_KIND_VALUES: ProposalKind[] = ['simple', 'elaborate'];
+/** Formato de la propuesta: reducida (carta breve) · intermedia (carta completa) · extendida (dossier). */
+export type ProposalKind = 'reduced' | 'intermediate' | 'extended';
+export const PROPOSAL_KIND_VALUES: ProposalKind[] = ['reduced', 'intermediate', 'extended'];
 
 /** Etiqueta en español de cada formato. */
 export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
-  simple: 'Propuesta sencilla',
-  elaborate: 'Propuesta elaborada',
+  reduced: 'Propuesta reducida',
+  intermediate: 'Propuesta intermedia',
+  extended: 'Propuesta extendida',
 };
 
 /** Parte interviniente (firma o cliente). Datos ausentes = null (regla 12). */

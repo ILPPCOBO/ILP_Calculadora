@@ -161,8 +161,14 @@ function renderEstimate(box, e) {
     <p class="small">${esc(e.explanation)}</p>
     ${warningsBlock(e.warnings)}
 
-    <div class="btn-row mt-16">
+    <div class="btn-row mt-16" style="align-items:center; gap:10px; flex-wrap:wrap;">
       <button class="btn" id="btn-breakdown">Generar desglose de actuaciones previstas</button>
+      <label for="prop-kind" class="small muted" style="margin-left:4px;">Formato de propuesta:</label>
+      <select id="prop-kind" style="padding:8px 10px; border:1px solid var(--border,#e4ddcb); border-radius:6px; font-family:inherit;">
+        <option value="reduced">Reducida (carta breve)</option>
+        <option value="intermediate" selected>Intermedia (carta completa)</option>
+        <option value="extended">Extendida (dossier)</option>
+      </select>
       <button class="btn btn-primary" id="btn-proposal">Generar propuesta de honorarios</button>
     </div>
   `;
@@ -179,7 +185,7 @@ async function generateProposalFromEstimate(btn, e) {
   try {
     const desc = document.getElementById('c-desc')?.value?.trim() || null;
     const prop = await api.createProposal({
-      kind: 'simple',
+      kind: document.getElementById('prop-kind')?.value || 'intermediate',
       case_or_calculation_id: e.calculation_id || null,
       service_category: e.service_detected,
       service_subcategory: e.service_subcategory || null,

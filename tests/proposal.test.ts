@@ -36,12 +36,12 @@ function baseInput(over: Partial<ProposalInput> = {}): ProposalInput {
   };
 }
 
-test('generateProposal (sencilla): estructura básica + cifras heredadas, no inventadas', () => {
-  const p = generateProposal(baseInput({ kind: 'simple' }));
-  assert.equal(p.kind, 'simple');
+test('generateProposal (intermedia): estructura básica + cifras heredadas, no inventadas', () => {
+  const p = generateProposal(baseInput({ kind: 'intermediate' }));
+  assert.equal(p.kind, 'intermediate');
   assert.equal(p.id.startsWith('prop_'), true);
   const keys = p.sections.map((s) => s.key);
-  for (const k of ['destinatario', 'apertura', 'objeto', 'equipo', 'honorarios', 'devengo', 'gastos', 'condiciones', 'aceptacion']) {
+  for (const k of ['destinatario', 'apertura', 'objeto', 'equipo', 'honorarios', 'devengo', 'gastos', 'limitacion', 'condiciones', 'aceptacion']) {
     assert.ok(keys.includes(k), `falta la sección "${k}"`);
   }
   const hon = p.sections.find((s) => s.key === 'honorarios')!;
@@ -91,15 +91,78 @@ test('marcadores nominales: se rellenan automáticamente con los datos de la pro
   assert.ok(!upd.missing_information.some((m) => /Referencia/i.test(m)), 'la referencia ya no está pendiente');
 });
 
-test('generateProposal (elaborada): añade secciones de dossier', () => {
-  const p = generateProposal(baseInput({ kind: 'elaborate' }));
-  assert.equal(p.kind, 'elaborate');
+test('generateProposal (extendida): añade secciones de dossier', () => {
+  const p = generateProposal(baseInput({ kind: 'extended' }));
+  assert.equal(p.kind, 'extended');
   const keys = p.sections.map((s) => s.key);
   for (const k of ['presentacion', 'metodologia', 'credenciales', 'premisas', 'cronograma', 'anexo_economico']) {
-    assert.ok(keys.includes(k), `la elaborada debe incluir "${k}"`);
+    assert.ok(keys.includes(k), `la extendida debe incluir "${k}"`);
   }
   // Sigue conteniendo el núcleo económico y de aceptación.
   assert.ok(keys.includes('honorarios') && keys.includes('aceptacion'));
+});
+
+test('los tres formatos crecen en detalle: reducida < intermedia < extendida', () => {
+  const r = generateProposal(baseInput({ kind: 'reduced' })).sections.length;
+  const i = generateProposal(baseInput({ kind: 'intermediate' })).sections.length;
+  const e = generateProposal(baseInput({ kind: 'extended' })).sections.length;
+  assert.ok(r < i && i < e, `esperaba reducida(${r}) < intermedia(${i}) < extendida(${e})`);
+});
+
+test('Limitación de responsabilidad presente en TODOS los formatos, limitada a honorarios percibidos', () => {
+  for (const kind of ['reduced', 'intermediate', 'extended'] as const) {
+    const p = generateProposal(baseInput({ kind }));
+    const lim = p.sections.find((s) => s.key === 'limitacion');
+    assert.ok(lim, `falta la cláusula de limitación de responsabilidad en "${kind}"`);
+    assert.ok(
+      /honorarios efectivamente percibidos/i.test(lim!.body),
+      `la limitación debe ceñirse a los honorarios efectivamente percibidos (${kind})`,
+    );
+  }
+});
+
+test('cláusulas jurídicas necesarias presentes (intermedia)', () => {
+  const p = generateProposal(baseInput({ kind: 'intermediate' }));
+  const keys = p.sections.map((s) => s.key);
+  for (const k of ['costas', 'limitacion', 'confidencialidad', 'blanqueo', 'propiedad_intelectual', 'custodia', 'terminacion', 'deontologia', 'jurisdiccion', 'condiciones']) {
+    assert.ok(keys.includes(k), `falta la cláusula "${k}"`);
+  }
+  // La extendida añade "Sobre el Despacho".
+  const ext = generateProposal(baseInput({ kind: 'extended' }));
+  assert.ok(ext.sections.some((s) => s.key === 'sobre_despacho'), 'la extendida incluye "Sobre el Despacho"');
+});
+
+test('lenguaje contractual español requerido presente (EGAE / CGC)', () => {
+  const all = generateProposal(baseInput({ kind: 'intermediate' })).sections.map((s) => s.body).join('\n');
+  const must = [
+    /Estatuto General de la Abogac/i,          // EGAE (art. 48)
+    /provisión de fondos/i,
+    /30% de los honorarios/i,                   // provisión mínima
+    /quince \(15\) días/i,                      // pago / preaviso
+    /revisión o impugnación de la minuta|revisión de la minuta/i,
+    /desistir del encargo/i,                    // derecho de desistimiento
+    /costas/i,                                  // costas
+    /blanqueo de capitales/i,                   // Ley 10/2010
+    /cinco \(5\) años/i,                        // custodia/destrucción
+    /IVA/i,
+    /honorarios efectivamente percibidos/i,     // limitación de responsabilidad (requisito del cliente)
+  ];
+  for (const re of must) {
+    assert.ok(re.test(all), `falta lenguaje contractual requerido: ${re}`);
+  }
+});
+
+test('milestones automáticos: "licencia CASP" genera el trámite MiCA ante la CNMV', () => {
+  const p = generateProposal({
+    kind: 'intermediate', service_category: 'Regulatorio financiero',
+    description: 'Licencia CASP para una startup de criptoactivos.',
+    currency: 'EUR', rate_used: 250, hours_recommended: 40, fee_recommended: 10000,
+  });
+  const objeto = p.sections.find((s) => s.key === 'objeto')!.body;
+  assert.ok(/CNMV/.test(objeto), 'el objeto incluye la solicitud ante la CNMV');
+  assert.ok(/MiCA/i.test(objeto), 'el objeto referencia MiCA');
+  assert.ok(p.included_elements.length >= 5, 'genera varios hitos del trámite');
+  assert.ok(p.assumptions.some((a) => /plantilla del trámite/i.test(a)), 'advierte que los hitos son de plantilla');
 });
 
 test('low confidence => warning de cifras orientativas (Regla 1)', () => {
@@ -115,7 +178,9 @@ test('exportProposalDocx: genera un .docx (ZIP válido) con el contenido esperad
   assert.equal(buffer[0], 0x50); assert.equal(buffer[1], 0x4b);            // "PK\x03\x04"
   assert.ok(buffer.includes(Buffer.from([0x50, 0x4b, 0x05, 0x06])), 'falta el EOCD del ZIP');
   const xml = buffer.toString('utf8');
-  assert.ok(/PROPUESTA DE HONORARIOS PROFESIONALES/i.test(xml));
+  assert.ok(xml.includes('ABOGADOS'), 'membrete ILP ABOGADOS');
+  assert.ok(/Arial/.test(xml), 'fuente Arial (mimetiza la carta)');
+  assert.ok(/P[áa]g\./.test(xml), 'pie de página con número de página');
   assert.ok(xml.includes('Honorarios profesionales'));
   assert.ok(xml.includes('Gastos, suplidos e impuestos'));
   assert.ok(xml.includes('4.000'), 'el importe aparece en el documento');

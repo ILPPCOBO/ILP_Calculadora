@@ -211,7 +211,7 @@ async function generateProposalFromCalc(btn, out, input) {
   try {
     const rate = (out.breakdown && out.breakdown.effective_hourly_rate) || input.hourly_rate || BASE_HOURLY_RATE;
     const prop = await api.createProposal({
-      kind: 'simple',
+      kind: 'intermediate',
       case_or_calculation_id: out.calculation_id || null,
       service_category: out.service_category || input.service_category,
       service_subcategory: out.service_subcategory || input.service_subcategory || null,

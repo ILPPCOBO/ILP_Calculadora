@@ -10,7 +10,20 @@ import {
   emptyState, loadingState, toast, fmtDate,
 } from '/app.js';
 
-const KIND_OPTS = [['simple', 'Sencilla (carta, 2–4 pp)'], ['elaborate', 'Elaborada (dossier, 10+ pp)']];
+const KIND_OPTS = [
+  ['reduced', 'Reducida (carta breve, cláusulas esenciales)'],
+  ['intermediate', 'Intermedia (carta completa con todas las cláusulas)'],
+  ['extended', 'Extendida (dossier: presentación, metodología, credenciales…)'],
+];
+const KIND_LABELS = {
+  reduced: 'Reducida', intermediate: 'Intermedia', extended: 'Extendida',
+  simple: 'Intermedia', elaborate: 'Extendida', // compat con propuestas antiguas
+};
+const AREAS = [
+  'No estoy seguro', 'Regulatorio financiero', 'Asesoramiento corporativo', 'M&A', 'Reestructuraciones',
+  'Concursal', 'Compliance', 'Protección de datos', 'Procesal civil', 'Procesal penal', 'Startups',
+  'Energías renovables', 'Secretarías de consejo', 'Laboral', 'Otros',
+];
 
 /* Marcadores nominales -> campo de detalle. Debe coincidir con DM en
    services/proposalGenerator.ts. Se sustituyen en vivo al editar los detalles. */
@@ -72,11 +85,15 @@ export async function render(view) {
     </div>
 
     <div class="card" id="picker-card">
-      <h2 class="card-title">Generar propuesta desde un cálculo o estimación</h2>
+      <h2 class="card-title">Generar propuesta</h2>
       <div class="form-grid">
         <div class="field" style="grid-column:1 / -1;">
-          <label for="pick-calc">Cálculo / estimación guardado (Historial)</label>
-          <select id="pick-calc"><option value="">Cargando…</option></select>
+          <label for="prop-desc">Describe el encargo (servicio a prestar)</label>
+          <textarea id="prop-desc" rows="4" placeholder="Ej.: Licencia CASP para una startup de criptoactivos."></textarea>
+        </div>
+        <div class="field">
+          <label for="prop-area">Área de servicio <span class="muted">(opcional)</span></label>
+          <select id="prop-area">${AREAS.map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select>
         </div>
         <div class="field">
           <label for="pick-kind">Formato de la propuesta</label>
@@ -86,6 +103,20 @@ export async function render(view) {
       <div class="btn-row mt-8">
         <button class="btn btn-primary" id="btn-gen">Generar propuesta</button>
       </div>
+
+      <details class="mt-16">
+        <summary class="small muted" style="cursor:pointer;">O generar desde un cálculo/estimación guardado</summary>
+        <div class="form-grid mt-8">
+          <div class="field" style="grid-column:1 / -1;">
+            <label for="pick-calc">Cálculo / estimación guardado (Historial)</label>
+            <select id="pick-calc"><option value="">Cargando…</option></select>
+          </div>
+        </div>
+        <div class="btn-row mt-8">
+          <button class="btn" id="btn-gen-calc">Generar desde el cálculo</button>
+        </div>
+      </details>
+
       <div id="prop-list" class="mt-16"></div>
     </div>
 
@@ -97,7 +128,48 @@ export async function render(view) {
   const id = hashQuery().get('id');
   if (id) await openProposal(view, id);
 
-  view.querySelector('#btn-gen').addEventListener('click', () => generateFromPicker(view));
+  view.querySelector('#btn-gen').addEventListener('click', () => generateFromDescription(view));
+  view.querySelector('#btn-gen-calc').addEventListener('click', () => generateFromPicker(view));
+}
+
+/** Genera una propuesta directamente desde la descripción del encargo (estima + redacta). */
+async function generateFromDescription(view) {
+  const desc = view.querySelector('#prop-desc').value.trim();
+  if (!desc) { toast('Describe el encargo o usa un cálculo guardado.', 'warn'); return; }
+  const areaSel = view.querySelector('#prop-area').value;
+  const area = areaSel && areaSel !== 'No estoy seguro' ? areaSel : null;
+  const kind = view.querySelector('#pick-kind').value || 'intermediate';
+  const btn = view.querySelector('#btn-gen'); btn.disabled = true; const t = btn.textContent; btn.textContent = 'Generando…';
+  try {
+    const e = await api.estimateCase({ description: desc, area });
+    if (e.needs_more_info) {
+      toast('Añade algo más de detalle al encargo para poder estimarlo.', 'warn');
+      return;
+    }
+    const prop = await api.createProposal({
+      kind,
+      case_or_calculation_id: e.calculation_id || null,
+      service_category: e.service_detected,
+      service_subcategory: e.service_subcategory || null,
+      description: desc,
+      tasks: e.tasks || [],
+      currency: e.currency,
+      rate_used: e.rate_used,
+      hours_min: e.hours_min,
+      hours_recommended: e.hours_recommended,
+      hours_max: e.hours_max,
+      fee_min: e.fee_min,
+      fee_recommended: e.fee_recommended,
+      fee_max: e.fee_max,
+      confidence_level: e.confidence_level,
+      created_by: 'usuario_interno',
+    });
+    await loadPicker(view);
+    await openProposal(view, prop.id);
+    toast('Propuesta generada.', 'ok');
+  } catch (err) {
+    toast(err.message, 'error', 'Error');
+  } finally { btn.textContent = t; btn.disabled = false; }
 }
 
 async function loadPicker(view) {
@@ -128,7 +200,7 @@ function renderProposalList(view, props) {
   const rows = props.slice(0, 30).map((p) => `<tr data-open="${esc(p.id)}" style="cursor:pointer;">
       <td class="nowrap small">${fmtDate(p.created_at, false)}</td>
       <td>${esc(p.service_category || '—')}</td>
-      <td class="small">${p.kind === 'elaborate' ? 'Elaborada' : 'Sencilla'}</td>
+      <td class="small">${esc(KIND_LABELS[p.kind] || p.kind)}</td>
       <td>${esc(p.client && p.client.name ? p.client.name : '—')}</td>
       <td class="num">${p.fee_recommended != null ? money(p.fee_recommended, p.currency) : '<span class="muted">—</span>'}</td>
       <td><button class="btn btn-sm" data-open="${esc(p.id)}">Abrir</button></td>
@@ -149,7 +221,7 @@ async function generateFromPicker(view) {
   if (!calcId) { toast('Elige primero un cálculo o estimación.', 'warn'); return; }
   const c = state.calcs.find((x) => x.id === calcId);
   if (!c) { toast('Cálculo no encontrado.', 'error'); return; }
-  const kind = view.querySelector('#pick-kind').value || 'simple';
+  const kind = view.querySelector('#pick-kind').value || 'intermediate';
   const btn = view.querySelector('#btn-gen'); btn.disabled = true; const t = btn.textContent; btn.textContent = 'Generando…';
   try {
     const prop = await api.createProposal(inputFromCalc(c, kind));
@@ -179,7 +251,7 @@ function renderEditor(view) {
   if (!p) { editor.innerHTML = ''; return; }
   const cl = p.client || {};
   const fm = p.firm || {};
-  const kindLabel = p.kind === 'elaborate' ? 'Elaborada' : 'Sencilla';
+  const kindLabel = KIND_LABELS[p.kind] || p.kind;
 
   editor.innerHTML = `
     <div class="card">

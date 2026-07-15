@@ -95,7 +95,10 @@ function fmtDateEs(iso: string): string {
   return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-const KIND_LABEL: Record<string, string> = { simple: 'Propuesta sencilla', elaborate: 'Propuesta elaborada' };
+const KIND_LABEL: Record<string, string> = {
+  reduced: 'Propuesta reducida', intermediate: 'Propuesta intermedia', extended: 'Propuesta extendida',
+  simple: 'Propuesta intermedia', elaborate: 'Propuesta extendida', // compat
+};
 
 export interface ExportOptions { firmName?: string | null; generatedBy?: string | null; }
 
@@ -109,18 +112,22 @@ function partyBlock(label: string, name: string | null, taxId: string | null, re
   );
 }
 
+/** Regla horizontal (borde inferior de párrafo) para separar el membrete. */
+function rule(color: string, size = 8): string {
+  return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="${size}" w:space="1" w:color="${color}"/></w:pBdr><w:spacing w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>`;
+}
+
 function buildDocumentXml(p: FeeProposal, opts: ExportOptions): string {
   const firm = (opts.firmName || p.firm.name || 'ILP Abogados').trim();
   const body: string[] = [];
 
-  // --- Encabezado tipo carta ---
-  body.push(para(run(firm, { bold: true, color: NAVY, size: 16 }), { spaceAfter: 20 }));
-  body.push(para(run(fmtDateEs(p.date), { color: GRAY, size: 10 }), { align: 'right', spaceAfter: 40 }));
-  body.push(para(run('PROPUESTA DE HONORARIOS PROFESIONALES', { bold: true, color: NAVY, size: 15 }), { spaceAfter: 30 }));
+  // --- Membrete: logotipo ILP (azul/negro) alineado a la derecha, como en una carta ---
   body.push(para(
-    run(`${p.service_category}${p.service_subcategory ? ` / ${p.service_subcategory}` : ''}   ·   ${KIND_LABEL[p.kind] || p.kind}`, { italic: true, color: GRAY, size: 10 }),
-    { spaceAfter: 160 },
+    run('ILP', { bold: true, color: NAVY, size: 30 }) + run(' ABOGADOS', { bold: true, color: NAVY, size: 12 }),
+    { align: 'right', spaceAfter: 0 },
   ));
+  body.push(rule(NAVY, 8));
+  body.push(para(run(fmtDateEs(p.date), { color: INK, size: 10 }), { align: 'right', spaceBefore: 120, spaceAfter: 160 }));
 
   // --- Secciones ---
   // Los apartados numerados llevan su título; los estructurales (destinatario,
@@ -131,32 +138,39 @@ function buildDocumentXml(p: FeeProposal, opts: ExportOptions): string {
   }
 
   // --- Nota final de revisión interna ---
-  body.push(heading1('Nota de revisión interna'));
   body.push(para(run(
-    'Documento generado automáticamente a partir de una estimación de honorarios. Es un borrador interno: '
-    + 'los honorarios son sugeridos y revisables (Regla 1) y no incluyen IVA ni suplidos salvo indicación expresa. '
-    + 'Revíselo y ajústelo antes de enviarlo al Cliente.',
-    { italic: true, color: GRAY, size: 9 },
-  ), { spaceBefore: 80 }));
+    'Documento generado automáticamente a partir de una estimación. Borrador interno: los honorarios son sugeridos '
+    + 'y revisables, y no incluyen IVA ni suplidos salvo indicación expresa. Revíselo antes de enviarlo al Cliente.',
+    { italic: true, color: GRAY, size: 8 },
+  ), { spaceBefore: 200 }));
 
-  // Sección vertical (portrait) A4.
-  const sectPr = '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>';
+  // Sección vertical (portrait) A4, con pie de página (rId2).
+  const sectPr = '<w:sectPr><w:footerReference w:type="default" r:id="rId2"/>'
+    + '<w:pgSz w:w="11906" w:h="16838"/>'
+    + '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="567" w:gutter="0"/></w:sectPr>';
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body.join('')}${sectPr}</w:body></w:document>`;
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body.join('')}${sectPr}</w:body></w:document>`;
 }
 
+/** Pie de página: firma + oficinas + número de página (campo PAGE). */
+const FOOTER_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:pBdr><w:top w:val="single" w:sz="4" w:space="6" w:color="${GRAY}"/></w:pBdr><w:jc w:val="center"/><w:spacing w:before="40"/></w:pPr>`
+  + `<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:color w:val="${GRAY}"/><w:sz w:val="13"/></w:rPr><w:t xml:space="preserve">ILP Abogados  ·  [oficinas del Despacho]  ·  Pág. </w:t></w:r>`
+  + `<w:fldSimple w:instr=" PAGE "><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:color w:val="${GRAY}"/><w:sz w:val="13"/></w:rPr><w:t>1</w:t></w:r></w:fldSimple>`
+  + `</w:p></w:ftr>`;
+
 const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:color w:val="${INK}"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>`;
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:color w:val="${INK}"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>`;
 
 const CONTENT_TYPES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`;
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>`;
 
 const RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
 
 const DOC_RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>`;
 
 function slug(s: string): string {
   return (s || 'propuesta').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -171,6 +185,7 @@ export function exportProposalDocx(proposal: FeeProposal, opts: ExportOptions = 
     { name: '_rels/.rels', data: RELS_XML },
     { name: 'word/document.xml', data: documentXml },
     { name: 'word/styles.xml', data: STYLES_XML },
+    { name: 'word/footer1.xml', data: FOOTER_XML },
     { name: 'word/_rels/document.xml.rels', data: DOC_RELS_XML },
   ]);
   const fileName = `Propuesta-honorarios-${slug(proposal.service_category)}-${proposal.id.replace(/^prop_/, '')}.docx`;

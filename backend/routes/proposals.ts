@@ -57,9 +57,9 @@ export async function handleProposals(ctx: RouteContext): Promise<RouteResult> {
     if (!category || category.trim() === '') {
       return badRequest('Falta "service_category" para generar la propuesta.');
     }
-    const kindRaw = str(o, 'kind') ?? 'simple';
+    const kindRaw = str(o, 'kind') ?? 'intermediate';
     const kind: ProposalKind = (PROPOSAL_KIND_VALUES as string[]).includes(kindRaw)
-      ? (kindRaw as ProposalKind) : 'simple';
+      ? (kindRaw as ProposalKind) : 'intermediate';
     const confRaw = str(o, 'confidence_level');
     const confidence: ConfidenceLevel | null = confRaw === 'high' || confRaw === 'medium' || confRaw === 'low'
       ? (confRaw as ConfidenceLevel) : null;

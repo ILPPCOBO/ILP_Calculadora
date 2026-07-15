@@ -130,13 +130,14 @@ async function serveStatic(urlPath: string, res: ServerResponse): Promise<boolea
       // Servir index.html dentro del directorio si existe.
       const indexFile = join(candidate, 'index.html');
       const data = await readFile(indexFile);
-      res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'], ...CORS_HEADERS });
+      res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'], 'Cache-Control': 'no-cache', ...CORS_HEADERS });
       res.end(data);
       return true;
     }
     const data = await readFile(candidate);
     const mime = MIME_TYPES[extname(candidate).toLowerCase()] ?? 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime, ...CORS_HEADERS });
+    // Sin caché: la herramienta es interna y evoluciona; que el navegador siempre revalide.
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache', ...CORS_HEADERS });
     res.end(data);
     return true;
   } catch {
