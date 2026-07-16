@@ -195,7 +195,7 @@ export async function expandScope(input: ScopeExpanderInput): Promise<ScopePlan 
       max_tokens: 8000,
       thinking: { type: 'adaptive' },
       output_config: {
-        effort: 'medium',
+        effort: 'low',
         format: { type: 'json_schema', schema: SCHEMA },
       },
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],

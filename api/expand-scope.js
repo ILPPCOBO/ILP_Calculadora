@@ -17,6 +17,9 @@
 
 const MODEL = 'claude-opus-4-8';
 
+// Vercel: permite hasta 60 s de ejecución (la llamada a Claude puede tardar).
+export const maxDuration = 60;
+
 const SYSTEM_PROMPT = [
   'Eres el redactor de la sección de ALCANCE Y PLAN DE TRABAJO de las hojas de encargo (propuestas de honorarios) de ILP Abogados, un despacho español.',
   'A partir de un resumen breve del encargo, elaboras un plan de proyecto detallado y específico para ese asunto, no genérico.',
@@ -118,7 +121,7 @@ export default async function handler(req, res) {
         model: MODEL,
         max_tokens: 8000,
         thinking: { type: 'adaptive' },
-        output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
+        output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: buildUserPrompt(input) }],
       }),

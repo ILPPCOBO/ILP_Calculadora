@@ -8,8 +8,8 @@
     "node": ">=22.6.0"
   },
   "scripts": {
-    "start": "node backend/server.ts",
-    "dev": "node --watch backend/server.ts",
+    "start": "node --env-file-if-exists=.env backend/server.ts",
+    "dev": "node --watch --env-file-if-exists=.env backend/server.ts",
     "seed": "node admin/seed.ts",
     "reset": "node admin/reset.ts",
     "import": "node admin/import.ts",
