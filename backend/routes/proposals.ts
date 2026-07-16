@@ -17,6 +17,7 @@ import {
 } from '../../services/proposalGenerator.ts';
 import type { ProposalInput, ProposalPartyInput } from '../../services/proposalGenerator.ts';
 import { saveProposalDocx } from '../../services/wordProposalExporter.ts';
+import { expandScope } from '../../services/scopeExpander.ts';
 import { PROPOSAL_KIND_VALUES } from '../models/index.ts';
 import type { ProposalKind, ConfidenceLevel, FeeProposal } from '../models/index.ts';
 import {
@@ -95,7 +96,26 @@ export async function handleProposals(ctx: RouteContext): Promise<RouteResult> {
       billing_terms: str(o, 'billing_terms'),
     };
     const createdBy = str(o, 'created_by') ?? str(o, 'createdBy') ?? 'usuario_interno';
-    const prop = createProposal(input, createdBy);
+    // Expande el alcance con IA (sólo si hay ANTHROPIC_API_KEY). Si no hay clave o
+    // falla, plan = null y la propuesta se genera en modo determinista. Nunca bloquea.
+    const useAi = o.ai_scope !== false;
+    const plan = useAi
+      ? await expandScope({
+          description: input.description ?? null,
+          serviceLabel: input.service_subcategory
+            ? `${input.service_category} / ${input.service_subcategory}`
+            : input.service_category,
+          kind,
+          currency: input.currency ?? 'EUR',
+          hoursRecommended: input.hours_recommended ?? null,
+          hoursMin: input.hours_min ?? null,
+          hoursMax: input.hours_max ?? null,
+          feeMin: input.fee_min ?? null,
+          feeRecommended: input.fee_recommended ?? null,
+          feeMax: input.fee_max ?? null,
+        })
+      : null;
+    const prop = createProposal(input, createdBy, plan);
     return created(prop);
   }
 

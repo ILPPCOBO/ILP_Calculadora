@@ -341,6 +341,40 @@ export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
   extended: 'Propuesta extendida',
 };
 
+/**
+ * Plan de trabajo estructurado que expande un resumen breve del abogado en un
+ * proyecto detallado (premisas, marco jurídico, fases). Lo redacta un LLM
+ * (scopeExpander) a partir de la descripción; las CIFRAS provienen siempre de la
+ * calculadora (regla 12): el LLM sólo DISTRIBUYE las horas dadas, no las inventa.
+ * Es un borrador: el marco jurídico debe verificarlo el letrado.
+ */
+export interface ScopeLegalFramework {
+  laws: string[];                          // leyes y normas con rango de ley
+  regulations: string[];                   // reglamentos (UE/estatales)
+  standards: string[];                     // estándares y normas técnicas
+  best_practices: string[];                // buenas prácticas / guías
+}
+export interface ScopePhase {
+  name: string | null;                     // nombre corto de la fase
+  objective: string;                       // objetivo de la fase
+  tasks: string[];                         // actuaciones concretas
+  documents_reviewed: string[];            // documentos que se revisarán
+  documents_produced: string[];            // documentos que se elaborarán
+  estimated_hours: number | null;          // horas estimadas (suman ~ total)
+  deliverables: string[];                  // entregables de la fase
+}
+export interface ScopePlan {
+  assumptions_included: string[];          // qué incluye el encargo
+  assumptions_excluded: string[];          // qué queda excluido, salvo pacto
+  assumptions_client: string[];            // colaboración/insumos a cargo del Cliente
+  legal_framework: ScopeLegalFramework;
+  phases: ScopePhase[];
+  deliverables: string[];                  // entregables consolidados
+  team: string[];                          // perfiles asignados (sin nombres)
+  total_hours: number | null;              // = horas recomendadas de la calculadora
+  generated_by: string;                    // p. ej. 'claude-opus-4-8'
+}
+
 /** Parte interviniente (firma o cliente). Datos ausentes = null (regla 12). */
 export interface ProposalParty {
   role: 'firm' | 'client';
@@ -392,6 +426,8 @@ export interface FeeProposal {
   billing_terms: string | null;
   // Contenido redactado.
   sections: ProposalSection[];
+  // Plan de trabajo estructurado (IA), si se generó; null en modo determinista.
+  scope_plan: ScopePlan | null;
   // Procedencia y cautelas.
   confidence_level: ConfidenceLevel;       // heredada de la estimación (baja en baseline)
   assumptions: string[];

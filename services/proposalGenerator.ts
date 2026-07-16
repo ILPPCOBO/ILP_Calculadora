@@ -20,7 +20,7 @@
 import { proposalsRepo } from '../backend/storage/index.ts';
 import { newId, nowIso } from '../backend/utils/id.ts';
 import type {
-  FeeProposal, ProposalKind, ProposalParty, ProposalSection, ConfidenceLevel,
+  FeeProposal, ProposalKind, ProposalParty, ProposalSection, ConfidenceLevel, ScopePlan,
 } from '../backend/models/index.ts';
 
 /** Marcador de dato ausente (regla 12: no se inventa). */
@@ -308,6 +308,7 @@ interface Ctx {
   tasks: string[]; included: string[]; excluded: string[];
   validityDays: number | null;
   billingTerms: string | null;
+  plan: ScopePlan | null;                 // plan de trabajo estructurado (IA), si lo hay
 }
 
 function firmName(c: Ctx): string {
@@ -339,6 +340,13 @@ function buildObjeto(c: Ctx): string {
   parts.push(`Los servicios a desarrollar por ${firmName(c)} comprenderán las tareas y trabajos relativos a la materia `
     + `de ${c.serviceLabel.toLowerCase()} objeto del presente encargo.`);
   if (c.description) parts.push(c.description);
+  // Con plan de trabajo (IA), el objeto es una introducción breve: el detalle
+  // (premisas, marco jurídico y fases) se desarrolla en los apartados siguientes.
+  if (c.plan) {
+    parts.push('El presente encargo se estructura y ejecutará conforme a las premisas, el marco jurídico aplicable y '
+      + 'el plan de trabajo por fases que se detallan en los apartados siguientes.');
+    return parts.join('\n\n');
+  }
   const scope = [...c.included, ...c.tasks];
   parts.push(scope.length
     ? 'En particular, el encargo comprende las siguientes actuaciones:\n' + bullets(scope, '')
@@ -348,6 +356,71 @@ function buildObjeto(c: Ctx): string {
       + c.excluded.join('; ') + '.');
   }
   return parts.join('\n\n');
+}
+
+/** "Premisas y alcance del encargo" a partir del plan de trabajo (IA). */
+function buildPremisasPlan(c: Ctx): string {
+  const p = c.plan;
+  if (!p) return '';
+  const parts: string[] = [];
+  if (p.assumptions_included.length) {
+    parts.push('**Se incluye en el presente encargo:**\n' + bullets(p.assumptions_included, ''));
+  }
+  const excluded = cleanArray([...(p.assumptions_excluded || []), ...c.excluded]);
+  if (excluded.length) {
+    parts.push('**Queda excluido, salvo pacto adicional por escrito:**\n' + bullets(excluded, ''));
+  }
+  if (p.assumptions_client.length) {
+    parts.push('**A cargo del Cliente (colaboración e insumos):**\n' + bullets(p.assumptions_client, ''));
+  }
+  if (!parts.length) return 'El alcance del encargo se corresponde con el plan de trabajo detallado a continuación.';
+  return parts.join('\n\n');
+}
+
+/** "Marco jurídico aplicable" a partir del plan (relación orientativa, a verificar). */
+function buildMarcoJuridico(c: Ctx): string {
+  const lf = c.plan ? c.plan.legal_framework : null;
+  if (!lf) return '';
+  const parts: string[] = [
+    'El asesoramiento se prestará con arreglo, entre otras, a la siguiente normativa, estándares y buenas prácticas '
+    + 'aplicables. Se trata de una relación orientativa que se concretará y verificará en función del asunto:',
+  ];
+  if (lf.laws.length) parts.push('**Leyes y normas con rango de ley:**\n' + bullets(lf.laws, ''));
+  if (lf.regulations.length) parts.push('**Reglamentos:**\n' + bullets(lf.regulations, ''));
+  if (lf.standards.length) parts.push('**Estándares y normas técnicas:**\n' + bullets(lf.standards, ''));
+  if (lf.best_practices.length) parts.push('**Buenas prácticas y guías:**\n' + bullets(lf.best_practices, ''));
+  if (parts.length === 1) return '';
+  return parts.join('\n\n');
+}
+
+/** "Plan de trabajo y fases" a partir del plan (objetivo/actuaciones/documentos/horas/entregables). */
+function buildPlanFases(c: Ctx): string {
+  const p = c.plan;
+  if (!p || !p.phases.length) return '';
+  const blocks: string[] = [];
+  p.phases.forEach((ph, i) => {
+    const horas = ph.estimated_hours != null ? ` (${ph.estimated_hours} h estimadas)` : '';
+    const nombre = ph.name && ph.name.trim() ? ph.name.trim() : ph.objective;
+    const lines: string[] = [`**Fase ${i + 1}. ${nombre}**${horas}`];
+    lines.push(`Objetivo: ${ph.objective}`);
+    if (ph.tasks.length) lines.push('Actuaciones:\n' + bullets(ph.tasks, ''));
+    if (ph.documents_reviewed.length) lines.push('Documentos que se revisarán: ' + ph.documents_reviewed.join('; ') + '.');
+    if (ph.documents_produced.length) lines.push('Documentos que se elaborarán: ' + ph.documents_produced.join('; ') + '.');
+    if (ph.deliverables.length) lines.push('Entregables de la fase: ' + ph.deliverables.join('; ') + '.');
+    blocks.push(lines.join('\n'));
+  });
+  const total = p.total_hours != null ? p.total_hours : c.hoursRec;
+  if (total != null) {
+    blocks.push(`La dedicación indicada por fases es una estimación orientativa; la dedicación total estimada del `
+      + `encargo es de ${total} horas.`);
+  }
+  if (p.deliverables.length) {
+    blocks.push('**Entregables del encargo (resumen):**\n' + bullets(p.deliverables, ''));
+  }
+  if (p.team.length) {
+    blocks.push('**Equipo asignado:** ' + p.team.join('; ') + '.');
+  }
+  return blocks.join('\n\n');
 }
 
 /** Cuerpo de "Devengo de los honorarios y provisión de fondos" (hitos + provisión). */
@@ -750,9 +823,24 @@ function clauseRegistry(c: Ctx): Clause[] {
 
 /** Ensambla la propuesta filtrando el registro por formato (staggering de cláusulas). */
 function assembleByKind(c: Ctx): RawSection[] {
-  const clauses: RawSection[] = clauseRegistry(c)
+  let clauses: RawSection[] = clauseRegistry(c)
     .filter((cl) => cl.tiers.includes(c.kind))
     .map((cl) => ({ key: cl.key, heading: cl.heading, body: cl.body }));
+  // Con plan de trabajo (IA): tras el Objeto se insertan, en TODOS los formatos,
+  // las Premisas, el Marco jurídico y el Plan por fases redactados a partir del plan.
+  if (c.plan) {
+    const planSecs: RawSection[] = [];
+    const premisas = buildPremisasPlan(c);
+    if (premisas) planSecs.push({ key: 'premisas_alcance', heading: 'Premisas y alcance del encargo', body: premisas });
+    const marco = buildMarcoJuridico(c);
+    if (marco) planSecs.push({ key: 'marco_juridico', heading: 'Marco jurídico aplicable', body: marco });
+    const fases = buildPlanFases(c);
+    if (fases) planSecs.push({ key: 'plan_trabajo', heading: 'Plan de trabajo y fases', body: fases });
+    const idx = clauses.findIndex((s) => s.key === 'objeto');
+    clauses = idx >= 0
+      ? [...clauses.slice(0, idx + 1), ...planSecs, ...clauses.slice(idx + 1)]
+      : [...planSecs, ...clauses];
+  }
   return [...structuralOpen(c), ...clauses, ...closingSections(c)];
 }
 
@@ -783,7 +871,7 @@ function normalizeKind(k: unknown): ProposalKind {
   return 'intermediate';
 }
 
-export function generateProposal(input: ProposalInput): FeeProposal {
+export function generateProposal(input: ProposalInput, plan: ScopePlan | null = null): FeeProposal {
   const id = newId('prop');
   const kind: ProposalKind = normalizeKind(input.kind);
   const currency = (input.currency || 'EUR').trim() || 'EUR';
@@ -800,11 +888,17 @@ export function generateProposal(input: ProposalInput): FeeProposal {
   const description = (input.description || '').replace(/\s+/g, ' ').trim() || null;
   const tasks = cleanArray(input.tasks);
   let included = cleanArray(input.included_elements);
-  const excluded = cleanArray(input.excluded_services);
+  let excluded = cleanArray(input.excluded_services);
   // Si el abogado no aporta actuaciones propias, genera automáticamente los hitos
   // típicos del servicio descrito (p. ej. "licencia CASP" -> trámite MiCA ante CNMV).
   let autoMilestones: string | null = null;
-  if (included.length + tasks.length < 2) {
+  if (plan) {
+    // El plan de trabajo (IA) sustituye a los hitos automáticos por plantilla:
+    // el devengo por hitos sigue las fases del plan.
+    const phaseNames = plan.phases.map((ph, i) => (ph.name && ph.name.trim()) ? ph.name.trim() : `Fase ${i + 1}`);
+    if (phaseNames.length) included = phaseNames;
+    excluded = cleanArray([...excluded, ...plan.assumptions_excluded]);
+  } else if (included.length + tasks.length < 2) {
     const dm = deriveMilestones(description, serviceLabel);
     if (dm) { included = dm.milestones; autoMilestones = dm.label; }
   }
@@ -825,6 +919,7 @@ export function generateProposal(input: ProposalInput): FeeProposal {
     description, tasks, included, excluded,
     validityDays: input.validity_days ?? null,
     billingTerms: (input.billing_terms || '').trim() || null,
+    plan,
   };
 
   const rawSections = numberSections(assembleByKind(ctx));
@@ -851,6 +946,11 @@ export function generateProposal(input: ProposalInput): FeeProposal {
     assumptions.push(`Las actuaciones e hitos para ${autoMilestones} se han generado automáticamente a partir de una `
       + 'plantilla del trámite; revíselos y ajústelos al caso concreto.');
   }
+  if (plan) {
+    assumptions.push('El alcance (premisas, marco jurídico y plan de trabajo por fases) se ha redactado automáticamente '
+      + `con IA (${plan.generated_by}) a partir del resumen del encargo; las horas por fases distribuyen la dedicación `
+      + 'estimada por la calculadora (regla 12: no se inventan importes). Es un borrador: revíselo con criterio profesional.');
+  }
 
   const warnings: string[] = [
     'Propuesta generada automáticamente a partir de una estimación: es un borrador interno; revísela y ajústela '
@@ -859,6 +959,10 @@ export function generateProposal(input: ProposalInput): FeeProposal {
   if (ctx.lowConfidence) {
     warnings.push('Las cifras económicas son orientativas (confianza baja): confírmelas con criterio profesional '
       + 'antes de proponerlas al Cliente.');
+  }
+  if (plan) {
+    warnings.push('Marco jurídico generado por IA: verifique las referencias normativas (leyes, reglamentos y, en su '
+      + 'caso, artículos) antes de enviar la propuesta al Cliente.');
   }
 
   return {
@@ -885,6 +989,7 @@ export function generateProposal(input: ProposalInput): FeeProposal {
     excluded_services: excluded,
     billing_terms: ctx.billingTerms,
     sections,
+    scope_plan: plan,
     confidence_level: confidence,
     assumptions,
     missing_information: missing,
@@ -899,8 +1004,8 @@ export function generateProposal(input: ProposalInput): FeeProposal {
 // Persistencia y CRUD
 // ---------------------------------------------------------------------------
 
-export function createProposal(input: ProposalInput, createdBy: string): FeeProposal {
-  const prop = generateProposal(input);
+export function createProposal(input: ProposalInput, createdBy: string, plan: ScopePlan | null = null): FeeProposal {
+  const prop = generateProposal(input, plan);
   prop.created_by = createdBy || 'usuario_interno';
   return proposalsRepo.save(prop);
 }

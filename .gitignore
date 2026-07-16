@@ -1,6 +1,11 @@
 node_modules/
 *.log
 .DS_Store
+# Claves y secretos: NUNCA se versionan. La ANTHROPIC_API_KEY va en .env (local)
+# o como variable de entorno de Vercel (web). Sólo se versiona .env.example.
+.env
+.env.*
+!.env.example
 # Modelos OCR de tesseract: son descargables, no código fuente (no se versionan).
 *.traineddata
 # Datos de prototipo (se regeneran con `npm run seed`). Se conservan las carpetas, no su contenido.
